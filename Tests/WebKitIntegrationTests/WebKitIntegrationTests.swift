@@ -374,7 +374,7 @@ private final class RecordingUIDelegate: NSObject, WKUIDelegate {
         _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping () -> Void
+        completionHandler: @escaping WebKitCallback0
     ) {
         alertMessages.append(message)
         completionHandler()
@@ -384,7 +384,7 @@ private final class RecordingUIDelegate: NSObject, WKUIDelegate {
         _ webView: WKWebView,
         runJavaScriptConfirmPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping (Bool) -> Void
+        completionHandler: @escaping WebKitCallback1<Bool>
     ) {
         confirmMessages.append(message)
         completionHandler(true)
@@ -395,7 +395,7 @@ private final class RecordingUIDelegate: NSObject, WKUIDelegate {
         runJavaScriptTextInputPanelWithPrompt prompt: String,
         defaultText: String?,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping (String?) -> Void
+        completionHandler: @escaping WebKitCallback1<String?>
     ) {
         promptMessages.append((prompt, defaultText))
         completionHandler("delegate answer")
@@ -405,7 +405,7 @@ private final class RecordingUIDelegate: NSObject, WKUIDelegate {
         _ webView: WKWebView,
         runOpenPanelWith parameters: WKOpenPanelParameters,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping ([URL]?) -> Void
+        completionHandler: @escaping WebKitCallback1<[URL]?>
     ) {
         uploadRequestCount += 1
         uploadAllowsMultipleSelection = parameters.allowsMultipleSelection
@@ -429,7 +429,7 @@ private final class RecordingDownloadDelegate: NSObject, WKNavigationDelegate, W
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationResponse: WKNavigationResponse,
-        decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
+        decisionHandler: @escaping WebKitCallback1<WKNavigationResponsePolicy>
     ) {
         let disposition = (navigationResponse.response as? HTTPURLResponse)?
             .value(forHTTPHeaderField: "Content-Disposition")?.lowercased() ?? ""
@@ -450,7 +450,7 @@ private final class RecordingDownloadDelegate: NSObject, WKNavigationDelegate, W
         _ download: WKDownload,
         decideDestinationUsing response: URLResponse,
         suggestedFilename: String,
-        completionHandler: @escaping (URL?) -> Void
+        completionHandler: @escaping WebKitCallback1<URL?>
     ) {
         self.suggestedFilename = suggestedFilename
         completionHandler(destination)

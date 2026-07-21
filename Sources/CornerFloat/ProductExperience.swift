@@ -141,7 +141,7 @@ private final class ProductPageWindowController: NSWindowController, WKNavigatio
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
-        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
+        decisionHandler: @escaping WebKitCallback1<WKNavigationActionPolicy>
     ) {
         guard navigationAction.navigationType == .linkActivated,
               let url = navigationAction.request.url else {

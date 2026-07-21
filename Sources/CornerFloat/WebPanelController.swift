@@ -1,6 +1,25 @@
 import AppKit
 import WebKit
 
+// WebKit's delegate callback annotations changed across the Xcode versions
+// that can build CornerFloat: Swift 5.10 imports plain closures, Swift 6.0/6.1
+// imports Sendable closures, and Swift 6.2+ also isolates them to MainActor.
+// Keep the witness signatures exact for each compiler so downloads, dialogs,
+// authentication, and navigation policies remain callable on macOS 14+.
+#if compiler(>=6.2)
+typealias WebKitCallback0 = @MainActor @Sendable () -> Void
+typealias WebKitCallback1<Value> = @MainActor @Sendable (Value) -> Void
+typealias WebKitCallback2<First, Second> = @MainActor @Sendable (First, Second) -> Void
+#elseif compiler(>=6.0)
+typealias WebKitCallback0 = @Sendable () -> Void
+typealias WebKitCallback1<Value> = @Sendable (Value) -> Void
+typealias WebKitCallback2<First, Second> = @Sendable (First, Second) -> Void
+#else
+typealias WebKitCallback0 = () -> Void
+typealias WebKitCallback1<Value> = (Value) -> Void
+typealias WebKitCallback2<First, Second> = (First, Second) -> Void
+#endif
+
 @MainActor
 final class WebPanelController: FloatingPanelController, WKNavigationDelegate, WKUIDelegate,
     WKDownloadDelegate, NSTextFieldDelegate, NSToolbarDelegate {
@@ -34,7 +53,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     private struct PendingDownloadDestination {
         let downloadID: ObjectIdentifier
         let suggestedFilename: String
-        let completion: @MainActor @Sendable (URL?) -> Void
+        let completion: WebKitCallback1<URL?>
     }
 
     private static let savedWidthKey = "preferredWebPanelWidth"
@@ -983,7 +1002,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         preferences: WKWebpagePreferences,
-        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+        decisionHandler: @escaping WebKitCallback2<WKNavigationActionPolicy, WKWebpagePreferences>
     ) {
         preferences.allowsContentJavaScript = true
         preferences.preferredContentMode = .recommended
@@ -1043,7 +1062,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationResponse: WKNavigationResponse,
-        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
+        decisionHandler: @escaping WebKitCallback1<WKNavigationResponsePolicy>
     ) {
         let response = navigationResponse.response
         let disposition = (response as? HTTPURLResponse)?
@@ -1115,7 +1134,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ webView: WKWebView,
         runOpenPanelWith parameters: WKOpenPanelParameters,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void
+        completionHandler: @escaping WebKitCallback1<[URL]?>
     ) {
         guard let panel else {
             completionHandler(nil)
@@ -1138,7 +1157,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable () -> Void
+        completionHandler: @escaping WebKitCallback0
     ) {
         presentJavaScriptAlert(message: message, buttons: ["OK"], webView: webView) {
             _ in completionHandler()
@@ -1149,7 +1168,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ webView: WKWebView,
         runJavaScriptConfirmPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+        completionHandler: @escaping WebKitCallback1<Bool>
     ) {
         presentJavaScriptAlert(
             message: message,
@@ -1165,7 +1184,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         runJavaScriptTextInputPanelWithPrompt prompt: String,
         defaultText: String?,
         initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable (String?) -> Void
+        completionHandler: @escaping WebKitCallback1<String?>
     ) {
         let input = NSTextField(string: defaultText ?? "")
         input.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
@@ -1219,7 +1238,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     func webView(
         _ webView: WKWebView,
         didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping WebKitCallback2<URLSession.AuthChallengeDisposition, URLCredential?>
     ) {
         if challenge.previousFailureCount > 0 {
             completionHandler(.cancelAuthenticationChallenge, nil)
@@ -1248,7 +1267,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     func webView(
         _ webView: WKWebView,
         authenticationChallenge challenge: URLAuthenticationChallenge,
-        shouldAllowDeprecatedTLS decisionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+        shouldAllowDeprecatedTLS decisionHandler: @escaping WebKitCallback1<Bool>
     ) {
         decisionHandler(false)
     }
@@ -1273,7 +1292,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ download: WKDownload,
         decideDestinationUsing response: URLResponse,
         suggestedFilename: String,
-        completionHandler: @escaping @MainActor @Sendable (URL?) -> Void
+        completionHandler: @escaping WebKitCallback1<URL?>
     ) {
         destinationQueue.append(PendingDownloadDestination(
             downloadID: ObjectIdentifier(download),
@@ -1287,7 +1306,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         _ download: WKDownload,
         willPerformHTTPRedirection response: HTTPURLResponse,
         newRequest request: URLRequest,
-        decisionHandler: @escaping @MainActor @Sendable (WKDownload.RedirectPolicy) -> Void
+        decisionHandler: @escaping WebKitCallback1<WKDownload.RedirectPolicy>
     ) {
         decisionHandler(BrowserSupport.isWebURL(request.url) ? .allow : .cancel)
     }
@@ -1295,7 +1314,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     func download(
         _ download: WKDownload,
         didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping WebKitCallback2<URLSession.AuthChallengeDisposition, URLCredential?>
     ) {
         completionHandler(challenge.previousFailureCount == 0
             ? .performDefaultHandling
