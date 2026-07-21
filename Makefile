@@ -7,7 +7,7 @@ SHELL := /bin/bash
 help: ## Show the contributor commands
 	@awk 'BEGIN {FS = ":.*## "; printf "CornerFloat contributor commands:\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-doctor: ## Check the local macOS development environment
+doctor: ## Check the local macOS build environment
 	@./scripts/doctor.sh
 
 bootstrap: ## Check the machine and resolve pinned Swift dependencies

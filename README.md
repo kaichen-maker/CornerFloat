@@ -1,7 +1,7 @@
 # CornerFloat
 
 [简体中文](README.zh-CN.md) · [Contributing](CONTRIBUTING.md) ·
-[Build from source](docs/SOURCE_BUILD.md) · [Roadmap](docs/ROADMAP.md) ·
+[Install from source](docs/SOURCE_BUILD.md) · [Roadmap](docs/ROADMAP.md) ·
 [Security](SECURITY.md)
 
 [![Contributor CI](https://github.com/kaichen-maker/CornerFloat/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kaichen-maker/CornerFloat/actions/workflows/ci.yml)
@@ -22,6 +22,115 @@ CornerFloat is early-stage software. The current source preview is **0.8.0
 (build 11)**, and saved-data formats or internal APIs may still evolve before
 1.0. There is no public signed binary or GitHub Release yet; build the current
 preview from source.
+
+## Install and use from source
+
+CornerFloat does not yet offer a signed, one-click app download. GitHub's green
+**Code → Download ZIP** button downloads the source code, not a finished
+`CornerFloat.app`. You can still build and install a personal copy on a
+supported Mac without an Apple developer account or administrator password.
+
+### What you need
+
+- A Mac running macOS 14 or later.
+- An internet connection for the first dependency download.
+- Xcode 15 or later, or Apple's free Command Line Tools with Swift 5.9 or later.
+- About 1 GB of free space for the source, dependency, and build cache.
+
+If the developer tools are not already installed, open **Terminal**, run the
+following command, complete Apple's installation dialog, and then continue:
+
+```bash
+xcode-select --install
+```
+
+### Option A: download the ZIP in your browser
+
+1. On this repository page, choose **Code → Download ZIP**.
+2. Open the downloaded ZIP to create a source folder, normally named
+   `CornerFloat-main`.
+3. Open **Terminal**.
+4. Type `cd `, including the space, drag that source folder into the
+   Terminal window, and press Return.
+5. Run these commands:
+
+```bash
+make bootstrap
+make install
+open "$HOME/Applications/CornerFloat.app"
+```
+
+### Option B: clone with Git
+
+```bash
+git clone https://github.com/kaichen-maker/CornerFloat.git
+cd CornerFloat
+make bootstrap
+make install
+open "$HOME/Applications/CornerFloat.app"
+```
+
+`make bootstrap` checks the Mac and downloads the pinned Swift dependency.
+`make install` builds CornerFloat for the current Mac, applies a local ad-hoc
+signature, and installs it at `~/Applications/CornerFloat.app` without `sudo`.
+The first build can take several minutes. It is complete when Terminal prints
+`Installed CornerFloat at .../Applications/CornerFloat.app`.
+
+CornerFloat is a menu-bar app, so it normally has no Dock icon. After it opens,
+look for the CornerFloat icon in the menu bar and use that menu to open ChatGPT,
+another website, or a saved workspace. Choose **Quit CornerFloat** from the
+same menu, or press `Command-Q` while CornerFloat is active, to exit completely.
+
+The source-built copy includes the core panels, tabs, browsing, Quick Sites,
+favorites, and workspaces. It does not include the release-only automatic-update
+channel or Apple-approved cross-site passkey entitlement. Some OAuth providers
+may also require **More → Open in Default Browser** under their own policies.
+
+### Try it without installing
+
+From the source folder, run the following commands to build and open a temporary
+copy at `dist/CornerFloat.app`:
+
+```bash
+make bootstrap
+make run
+```
+
+### Update or remove a source-built copy
+
+First quit CornerFloat. If the saved library matters to you, export a backup from
+Settings before updating this early preview. If you cloned with Git, return to
+the `CornerFloat` folder and run:
+
+```bash
+git pull --ff-only
+make bootstrap
+make install
+open "$HOME/Applications/CornerFloat.app"
+```
+
+If you used **Download ZIP**, download the latest ZIP again, open the new source
+folder, and repeat `make bootstrap` and `make install`.
+
+To remove the installed app, first turn off **Launch at Login** in Settings and
+quit CornerFloat. Then run this from the source folder:
+
+```bash
+make uninstall
+```
+
+This preserves preferences, saved workspaces, and website sessions. If the
+source folder is gone, open your home `Applications` folder in Finder and move
+`CornerFloat.app` to the Trash instead.
+
+If a command fails, read the first `FAIL`, `error:`, or `fatal:` line. The most
+common causes are a Mac older than macOS 14, unfinished Command Line Tools
+installation, or a failed first dependency download. If the app opens but no
+window appears, check the macOS menu bar: CornerFloat is intentionally a
+menu-bar app.
+
+For troubleshooting and separate data-reset instructions, read the
+[source-build guide](docs/SOURCE_BUILD.md).
 
 ## Real workflow preview
 
@@ -113,14 +222,14 @@ git clone https://github.com/kaichen-maker/CornerFloat.git
 cd CornerFloat
 make bootstrap
 make run
-make test
 make check
 ```
 
-No Apple developer account is needed. `make run` creates an ad-hoc signed app at
-`dist/CornerFloat.app` and opens it for local development or personal use. A
-Developer ID and notarization are needed only when a maintainer distributes a
-downloadable binary to other users. CornerFloat does not currently publish one.
+This contributor path opens the temporary development copy and runs the checks
+expected before a pull request. For a reusable personal installation, follow
+**Install and use from source** above. A Developer ID and notarization are
+needed only when a maintainer distributes a downloadable binary to other users;
+CornerFloat does not currently publish one.
 
 Available commands:
 
@@ -132,7 +241,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing permissions,
 persistence, navigation, or updates.
 
-## Installation behavior
+## Window and application behavior
 
 CornerFloat is a menu-bar app and normally has no Dock icon. After launching,
 use the CornerFloat status item to open ChatGPT, another webpage, or a saved
@@ -141,12 +250,6 @@ workspace.
 Closing a red traffic-light button removes that panel. It does not terminate the
 menu-bar process. Choose **Quit CornerFloat** from the menu or press `Command-Q`
 while the app is active to exit completely.
-
-For a reusable source-built copy without `sudo`, run `make install`; this places
-the app in `~/Applications`. `make uninstall` removes only that app bundle and
-deliberately preserves preferences, the portable library, and WebKit website
-data. See [the source-build guide](docs/SOURCE_BUILD.md) for separate reset
-paths.
 
 ## Keyboard shortcuts
 

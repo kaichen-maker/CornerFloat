@@ -65,4 +65,4 @@ if ((failures > 0)); then
     exit 1
 fi
 
-printf '\nCornerFloat development environment is ready.\n'
+printf '\nCornerFloat build environment is ready.\n'
