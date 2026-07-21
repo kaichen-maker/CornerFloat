@@ -2,16 +2,22 @@ import AppKit
 import WebKit
 
 // WebKit's delegate callback annotations changed across the Xcode versions
-// that can build CornerFloat: Swift 5.10 imports plain closures, while Swift 6
-// imports MainActor-isolated Sendable closures.
-// Keep the witness signatures exact for each compiler so downloads, dialogs,
-// authentication, and navigation policies remain callable on macOS 14+.
-#if compiler(>=6.0)
+// that can build CornerFloat. Swift 5.10 imports plain closures; Swift 6 makes
+// them Sendable, while the SDK bundled with Xcode 16.4 leaves the no-argument
+// JavaScript alert callback nonisolated. Keep the witness signatures exact so
+// downloads, dialogs, authentication, and navigation remain callable on 14+.
+#if compiler(>=6.2)
 typealias WebKitCallback0 = @MainActor @Sendable () -> Void
+#elseif compiler(>=6.0)
+typealias WebKitCallback0 = @Sendable () -> Void
+#else
+typealias WebKitCallback0 = () -> Void
+#endif
+
+#if compiler(>=6.0)
 typealias WebKitCallback1<Value> = @MainActor @Sendable (Value) -> Void
 typealias WebKitCallback2<First, Second> = @MainActor @Sendable (First, Second) -> Void
 #else
-typealias WebKitCallback0 = () -> Void
 typealias WebKitCallback1<Value> = (Value) -> Void
 typealias WebKitCallback2<First, Second> = (First, Second) -> Void
 #endif
