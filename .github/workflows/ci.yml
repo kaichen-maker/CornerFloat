@@ -34,5 +34,9 @@ jobs:
       - name: Resolve pinned dependencies
         run: scripts/swiftpm.sh resolve
 
-      - name: Run contributor checks
-        run: make check
+      - name: Run contributor tests
+        run: make test
+
+      - name: Run strict concurrency checks
+        if: matrix.macos == 15
+        run: make strict
