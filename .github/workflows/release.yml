@@ -1,0 +1,474 @@
+name: "Optional: Signed Binary Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag matching CFBundleShortVersionString (for example, v0.8.0)
+        required: true
+        type: string
+      include_passkey_support:
+        description: Include the optional Apple-approved cross-site Passkey entitlement
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cornerfloat-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate and test
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: macos-26
+    steps:
+      - name: Check out the requested default-branch commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag, version, and build number
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          PREVIOUS_APPCAST="$RUNNER_TEMP/previous-appcast.xml"
+          RELEASES_JSON="$RUNNER_TEMP/releases.json"
+          LATEST_RELEASE_JSON="$RUNNER_TEMP/latest-release.json"
+          API_ROOT="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          VALIDATION_ARGS=(
+            version
+            --info-plist Resources/Info.plist
+            --tag "$RELEASE_TAG"
+          )
+
+          RELEASES_STATUS="$(curl --silent --show-error --location \
+            --output "$RELEASES_JSON" \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$API_ROOT/releases?per_page=1")"
+          if [[ "$RELEASES_STATUS" != "200" ]]; then
+            echo "Cannot prove GitHub release history (HTTP $RELEASES_STATUS); refusing to treat this as a first release." >&2
+            exit 1
+          fi
+
+          RELEASE_COUNT="$(python3 - "$RELEASES_JSON" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if not isinstance(payload, list):
+              raise SystemExit("GitHub releases response is not a JSON array")
+          print(len(payload))
+          PY
+          )"
+
+          if [[ "$RELEASE_COUNT" == "0" ]]; then
+            echo "GitHub reports no release history; validating this as the first release."
+          else
+            LATEST_STATUS="$(curl --silent --show-error --location \
+              --output "$LATEST_RELEASE_JSON" \
+              --write-out '%{http_code}' \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "$API_ROOT/releases/latest")"
+            if [[ "$LATEST_STATUS" != "200" ]]; then
+              echo "Release history exists, but the latest published release cannot be read (HTTP $LATEST_STATUS); refusing to continue." >&2
+              exit 1
+            fi
+
+            PREVIOUS_APPCAST_URL="$(python3 - "$LATEST_RELEASE_JSON" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              release = json.load(stream)
+          matches = [
+              asset.get("browser_download_url")
+              for asset in release.get("assets", [])
+              if asset.get("name") == "appcast.xml"
+          ]
+          if len(matches) != 1 or not isinstance(matches[0], str) or not matches[0]:
+              raise SystemExit("latest published release must contain exactly one appcast.xml asset")
+          print(matches[0])
+          PY
+            )"
+            curl --fail --silent --show-error --location \
+              "$PREVIOUS_APPCAST_URL" \
+              --output "$PREVIOUS_APPCAST"
+            VALIDATION_ARGS+=(--previous-appcast "$PREVIOUS_APPCAST")
+          fi
+
+          python3 scripts/validate_release.py "${VALIDATION_ARGS[@]}"
+          python3 scripts/validate_release.py release-metadata \
+            --info-plist Resources/Info.plist \
+            --tag "$RELEASE_TAG" \
+            --release-notes RELEASE_NOTES.md \
+            --changelog CHANGELOG.md
+
+      - name: Resolve dependencies
+        run: scripts/swiftpm.sh resolve
+
+      - name: Run tests
+        run: scripts/test.sh
+
+      - name: Run AppKit acceptance tests
+        run: scripts/acceptance-tests.sh
+
+  release:
+    name: Sign, notarize, and publish
+    needs: validate
+    if: ${{ needs.validate.result == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: macos-26
+    environment: release
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      NOTARY_PROFILE: CornerFloat-CI
+      UPDATE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
+      UPDATE_DOWNLOAD_URL_PREFIX: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}
+    steps:
+      - name: Check out the validated commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Require an anonymously accessible public repository
+        run: |
+          set -euo pipefail
+          REPOSITORY_JSON="$RUNNER_TEMP/repository.json"
+          API_URL="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          STATUS="$(curl --silent --show-error --location \
+            --output "$REPOSITORY_JSON" \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$API_URL")"
+          if [[ "$STATUS" != "200" ]]; then
+            echo "Repository is not anonymously accessible through the public GitHub API (HTTP $STATUS)." >&2
+            exit 1
+          fi
+          python3 - "$REPOSITORY_JSON" <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              repository = json.load(stream)
+          if repository.get("full_name") != os.environ["GITHUB_REPOSITORY"]:
+              raise SystemExit("public GitHub API returned the wrong repository")
+          if repository.get("private") is not False or repository.get("visibility") != "public":
+              raise SystemExit("CornerFloat releases require a public GitHub repository")
+          PY
+
+      - name: Revalidate release identity
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_release.py version \
+            --info-plist Resources/Info.plist \
+            --tag "$RELEASE_TAG"
+          python3 scripts/validate_release.py release-metadata \
+            --info-plist Resources/Info.plist \
+            --tag "$RELEASE_TAG" \
+            --release-notes RELEASE_NOTES.md \
+            --changelog CHANGELOG.md
+
+      - name: Resolve dependencies
+        run: scripts/swiftpm.sh resolve
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.BUILD_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="$RUNNER_TEMP/DeveloperID.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/CornerFloat.keychain-db"
+          trap 'rm -f "$CERTIFICATE_PATH"' EXIT
+          umask 077
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          unset CERTIFICATE_BASE64
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          unset CERTIFICATE_PASSWORD
+          rm -f "$CERTIFICATE_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          unset KEYCHAIN_PASSWORD
+          DEFAULT_KEYCHAIN="$(security default-keychain -d user | tr -d '"')"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$DEFAULT_KEYCHAIN"
+
+      - name: Configure App Store Connect notarization key
+        env:
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_API_PRIVATE_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
+          trap 'rm -f "$NOTARY_KEY_PATH"' EXIT
+          umask 077
+          printf '%s' "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          unset NOTARY_KEY_BASE64
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+            --key "$NOTARY_KEY_PATH" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID"
+          unset NOTARY_KEY_ID NOTARY_ISSUER_ID
+          rm -f "$NOTARY_KEY_PATH"
+
+      - name: Build, sign, notarize, and generate appcast
+        env:
+          SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          ENABLE_PASSKEY_RELEASE: ${{ inputs.include_passkey_support }}
+          PASSKEY_PROFILE_BASE64: ${{ inputs.include_passkey_support && secrets.DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 || '' }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          SPARKLE_PRIVATE_KEY_BASE64: ${{ secrets.SPARKLE_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          SPARKLE_PRIVATE_KEY_FILE="$RUNNER_TEMP/CornerFloat-Sparkle.key"
+          DEVELOPER_ID_PROVISIONING_PROFILE_FILE="$RUNNER_TEMP/CornerFloat-DeveloperID.provisionprofile"
+          trap 'rm -f "$SPARKLE_PRIVATE_KEY_FILE" "$DEVELOPER_ID_PROVISIONING_PROFILE_FILE"' EXIT
+          umask 077
+          printf '%s' "$SPARKLE_PRIVATE_KEY_BASE64" | base64 --decode > "$SPARKLE_PRIVATE_KEY_FILE"
+          unset SPARKLE_PRIVATE_KEY_BASE64
+          if [[ "$ENABLE_PASSKEY_RELEASE" == "true" ]]; then
+            if [[ -z "$PASSKEY_PROFILE_BASE64" ]]; then
+              echo "include_passkey_support requires the protected DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 secret." >&2
+              exit 1
+            fi
+            printf '%s' "$PASSKEY_PROFILE_BASE64" \
+              | base64 --decode > "$DEVELOPER_ID_PROVISIONING_PROFILE_FILE"
+            export DEVELOPER_ID_PROVISIONING_PROFILE_FILE
+          else
+            DEVELOPER_ID_PROVISIONING_PROFILE_FILE=""
+            export DEVELOPER_ID_PROVISIONING_PROFILE_FILE
+          fi
+          unset PASSKEY_PROFILE_BASE64 ENABLE_PASSKEY_RELEASE
+          export SPARKLE_PRIVATE_KEY_FILE
+          scripts/release.sh
+          rm -f "$SPARKLE_PRIVATE_KEY_FILE" "$DEVELOPER_ID_PROVISIONING_PROFILE_FILE"
+          trap - EXIT
+          unset SPARKLE_PRIVATE_KEY_FILE DEVELOPER_ID_PROVISIONING_PROFILE_FILE
+          unset SPARKLE_PUBLIC_KEY SIGN_IDENTITY
+
+      - name: Publish GitHub release and update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(plutil -extract CFBundleShortVersionString raw Resources/Info.plist)"
+          BUILD="$(plutil -extract CFBundleVersion raw Resources/Info.plist)"
+          ARCH="universal"
+          DMG="dist/CornerFloat-$VERSION-macOS-$ARCH.dmg"
+          APP_ZIP="dist/CornerFloat-macOS-$ARCH.zip"
+          UPDATE_ZIP="dist/updates/CornerFloat-$VERSION-$BUILD-macOS-$ARCH.zip"
+          UPDATE_NOTES="dist/updates/CornerFloat-$VERSION-$BUILD-macOS-$ARCH.md"
+          APPCAST="dist/updates/appcast.xml"
+          CHECKSUMS="dist/SHA256SUMS.txt"
+          ASSETS=(
+            "$DMG"
+            "$APP_ZIP"
+            "$UPDATE_ZIP"
+            "$UPDATE_NOTES"
+            "$APPCAST"
+            "$CHECKSUMS"
+            PRIVACY.md
+            SUPPORT.md
+          )
+
+          for asset in "${ASSETS[@]}"; do
+            test -f "$asset"
+          done
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "A GitHub release already exists for $RELEASE_TAG; refusing to replace it." >&2
+            exit 1
+          fi
+
+          RELEASE_CREATED=0
+          cleanup_incomplete_release() {
+            local status=$?
+            trap - EXIT
+            if [[ "$status" != "0" && "$RELEASE_CREATED" == "1" ]]; then
+              echo "Release publication failed; deleting the incomplete release and its workflow-created tag." >&2
+              gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+            fi
+            exit "$status"
+          }
+          trap cleanup_incomplete_release EXIT
+
+          gh release create "$RELEASE_TAG" \
+            --draft \
+            --target "$GITHUB_SHA" \
+            --title "CornerFloat $RELEASE_TAG" \
+            --notes-file RELEASE_NOTES.md
+          RELEASE_CREATED=1
+
+          gh release upload "$RELEASE_TAG" "${ASSETS[@]}"
+          RELEASE_JSON="$RUNNER_TEMP/uploaded-release.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$RELEASE_JSON"
+          python3 - "$RELEASE_JSON" "${ASSETS[@]}" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              release = json.load(stream)
+          if release.get("tag_name") != os.environ["RELEASE_TAG"]:
+              raise SystemExit("uploaded draft has the wrong tag")
+          if release.get("draft") is not True:
+              raise SystemExit("release became public before asset verification")
+
+          expected = {}
+          for value in sys.argv[2:]:
+              path = Path(value)
+              if path.name in expected:
+                  raise SystemExit(f"duplicate local release asset name: {path.name}")
+              expected[path.name] = path.stat().st_size
+          remote_assets = release.get("assets")
+          if not isinstance(remote_assets, list):
+              raise SystemExit("GitHub release assets response is not a list")
+          remote = {asset.get("name"): asset for asset in remote_assets}
+          if set(remote) != set(expected) or len(remote_assets) != len(expected):
+              raise SystemExit(
+                  f"uploaded assets do not match expected names: "
+                  f"remote={sorted(remote)}, expected={sorted(expected)}"
+              )
+          for name, expected_size in expected.items():
+              asset = remote[name]
+              if asset.get("size") != expected_size:
+                  raise SystemExit(
+                      f"uploaded asset {name} is {asset.get('size')} bytes, "
+                      f"expected {expected_size}"
+                  )
+              if asset.get("state") != "uploaded":
+                  raise SystemExit(f"uploaded asset {name} is not ready: {asset.get('state')!r}")
+          PY
+
+          gh release edit "$RELEASE_TAG" --draft=false --latest
+          PUBLISHED_DRAFT="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.draft')"
+          LATEST_TAG=""
+          for attempt in 1 2 3 4 5; do
+            if LATEST_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" \
+              && [[ "$LATEST_TAG" == "$RELEASE_TAG" ]]; then
+              break
+            fi
+            if [[ "$attempt" != "5" ]]; then
+              sleep 2
+            fi
+          done
+          if [[ "$PUBLISHED_DRAFT" != "false" || "$LATEST_TAG" != "$RELEASE_TAG" ]]; then
+            echo "GitHub did not publish $RELEASE_TAG as the latest release." >&2
+            exit 1
+          fi
+
+          download_public_asset() {
+            local url="$1"
+            local output="$2"
+            local attempt
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              if /usr/bin/env -u GH_TOKEN -u GITHUB_TOKEN \
+                curl --disable --fail --silent --show-error --location \
+                  --proto '=https' \
+                  --proto-redir '=https' \
+                  --header 'Authorization:' \
+                  --header 'Cookie:' \
+                  --connect-timeout 15 \
+                  --max-time 120 \
+                  "$url" \
+                  --output "$output"; then
+                return 0
+              fi
+              if [[ "$attempt" != "10" ]]; then
+                sleep 3
+              fi
+            done
+            echo "Could not anonymously download public release asset: $url" >&2
+            return 1
+          }
+
+          PUBLIC_DIR="$RUNNER_TEMP/public-release"
+          PUBLIC_UPDATE_ZIP="$PUBLIC_DIR/${UPDATE_ZIP##*/}"
+          PUBLIC_APPCAST="$PUBLIC_DIR/appcast.xml"
+          PUBLIC_CHECKSUMS="$PUBLIC_DIR/SHA256SUMS.txt"
+          RELEASE_DOWNLOAD_ROOT="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
+          LATEST_DOWNLOAD_ROOT="https://github.com/$GITHUB_REPOSITORY/releases/latest/download"
+          mkdir -p "$PUBLIC_DIR"
+
+          # Download the enclosure first so the subsequently downloaded feed is
+          # necessarily at least as new for the stale-appcast validator.
+          download_public_asset \
+            "$RELEASE_DOWNLOAD_ROOT/${UPDATE_ZIP##*/}" \
+            "$PUBLIC_UPDATE_ZIP"
+          if ! cmp -s "$UPDATE_ZIP" "$PUBLIC_UPDATE_ZIP"; then
+            echo "Public update enclosure differs from its locally verified release byte stream." >&2
+            exit 1
+          fi
+
+          PUBLIC_FEED_VERIFIED=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if download_public_asset \
+                "$LATEST_DOWNLOAD_ROOT/appcast.xml" \
+                "$PUBLIC_APPCAST" \
+              && download_public_asset \
+                "$LATEST_DOWNLOAD_ROOT/SHA256SUMS.txt" \
+                "$PUBLIC_CHECKSUMS" \
+              && python3 scripts/validate_release.py appcast \
+                --appcast "$PUBLIC_APPCAST" \
+                --archive "$PUBLIC_UPDATE_ZIP" \
+                --build "$BUILD" \
+                --short-version "$VERSION" \
+                --download-prefix "$RELEASE_DOWNLOAD_ROOT" \
+              && python3 scripts/release_checksums.py verify \
+                --manifest "$PUBLIC_CHECKSUMS" \
+                "$PUBLIC_APPCAST" \
+                "$PUBLIC_UPDATE_ZIP" \
+              && cmp -s "$APPCAST" "$PUBLIC_APPCAST" \
+              && cmp -s "$CHECKSUMS" "$PUBLIC_CHECKSUMS"; then
+              PUBLIC_FEED_VERIFIED=1
+              break
+            fi
+            if [[ "$attempt" != "10" ]]; then
+              echo "Public latest-download assets have not converged yet; retrying ($attempt/10)."
+              sleep 3
+            fi
+          done
+          if [[ "$PUBLIC_FEED_VERIFIED" != "1" ]]; then
+            echo "Public appcast or checksum manifest differs from the locally verified release bytes." >&2
+            exit 1
+          fi
+          echo "Anonymous public update verification passed: feed, EdDSA-signed enclosure, and SHA-256 manifest match the verified release bytes."
+          RELEASE_CREATED=0
+
+      - name: Clean up signing credentials
+        if: ${{ always() }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/CornerFloat.keychain-db"
+          rm -f \
+            "$RUNNER_TEMP/DeveloperID.p12" \
+            "$RUNNER_TEMP/CornerFloat-Sparkle.key" \
+            "$RUNNER_TEMP/CornerFloat-DeveloperID.provisionprofile" \
+            "$RUNNER_TEMP"/AuthKey_*.p8
+          security delete-generic-password \
+            -s com.apple.gke.notary.tool \
+            -a "$NOTARY_PROFILE" || true
+          security delete-keychain "$KEYCHAIN_PATH" || true

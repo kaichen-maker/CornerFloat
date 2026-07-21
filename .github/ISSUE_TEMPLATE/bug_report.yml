@@ -1,0 +1,102 @@
+name: Bug report
+description: Report a reproducible CornerFloat problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve CornerFloat. Remove credentials, cookies, account names, private URLs, and personal window titles from every attachment. Security vulnerabilities belong in the private process described in SECURITY.md.
+
+  - type: input
+    id: version
+    attributes:
+      label: CornerFloat version or commit
+      description: Use the About panel version/build, or paste the tested commit hash.
+      placeholder: 0.8.0 (11) or commit abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS and Mac
+      placeholder: macOS 15.5, Apple silicon
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build type
+      options:
+        - Local ad-hoc build
+        - Signed public release
+        - I am not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Web panel or tabs
+        - Search or address resolution
+        - Window resizing, placement, or edge auto-hide
+        - Favorites, recents, or workspaces
+        - Settings, Launch at Login, or data import/export
+        - Menus, hot keys, or quitting
+        - Passkeys or sign-in fallback
+        - Updates or packaging
+        - Accessibility
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Give the smallest repeatable sequence, including whether a permission was granted or denied.
+      placeholder: |
+        1. Launch CornerFloat...
+        2. Choose...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Add logs, screenshots, or recordings only after removing private data.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I removed credentials and private information from this report.
+          required: true
+        - label: This is not a privately reportable security vulnerability.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true

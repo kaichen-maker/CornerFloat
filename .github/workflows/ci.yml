@@ -1,0 +1,38 @@
+name: Contributor CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contributor-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: macOS ${{ matrix.macos }}
+    runs-on: macos-${{ matrix.macos }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        macos: [14, 15]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Check development environment
+        run: scripts/doctor.sh
+
+      - name: Resolve pinned dependencies
+        run: scripts/swiftpm.sh resolve
+
+      - name: Run contributor checks
+        run: make check

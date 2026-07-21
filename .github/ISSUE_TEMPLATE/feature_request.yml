@@ -1,0 +1,67 @@
+name: Feature request
+description: Propose a focused improvement to CornerFloat
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What task is difficult today, and who encounters it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: Describe the user-visible behavior, not only an implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include existing macOS behavior or simpler workarounds.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundary changes
+      description: Select every area the proposal may affect.
+      options:
+        - label: New or broader macOS permission
+        - label: New network destination or online service
+        - label: New persistent user data or migration
+        - label: New third-party dependency
+        - label: Background CPU or energy behavior
+        - label: None of the above
+
+  - type: textarea
+    id: macfit
+    attributes:
+      label: macOS fit and accessibility
+      description: How should it work with keyboard control, VoiceOver, reduced transparency, Spaces, and multiple displays?
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Contribution interest
+      options:
+        - I can implement this
+        - I can help test or document it
+        - I am proposing it for discussion
+
+  - type: checkboxes
+    id: conduct
+    attributes:
+      label: Community agreement
+      options:
+        - label: I searched existing issues and the roadmap.
+          required: true
+        - label: I agree to follow the Code of Conduct.
+          required: true
