@@ -1,0 +1,35 @@
+.DS_Store
+.build*/
+.swiftpm/
+dist/
+scripts/__pycache__/
+*.py[cod]
+
+# Local demo recording and transcoding artifacts. The repository keeps only
+# the privacy-safe poster images under docs/images/; full recordings are hosted
+# outside Git so clones stay small and GitHub's per-object limit is never hit.
+.demo-video-stage/
+docs/media/
+
+# Local environment and Xcode distribution output.
+.env
+.env.*
+!.env.example
+DerivedData/
+*.xcarchive
+
+# Signing and notarization secrets must never enter source control.
+*.p12
+*.p8
+*.key
+*.pem
+*.cer
+*.crt
+*.mobileprovision
+*.provisionprofile
+
+# Local IDE and editor state.
+.idea/
+.vscode/
+*.xcuserstate
+xcuserdata/
