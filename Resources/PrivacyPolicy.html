@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CornerFloat Privacy Policy</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { max-width: 720px; margin: 0 auto; padding: 44px 34px 64px; }
+    h1 { font-size: 34px; letter-spacing: -.025em; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 30px 0 8px; }
+    p, li { font-size: 15px; line-height: 1.55; }
+    .meta { color: color-mix(in srgb, CanvasText 60%, transparent); }
+    .card { padding: 18px 20px; border-radius: 18px; background: color-mix(in srgb, CanvasText 7%, transparent); }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">CornerFloat · Effective July 20, 2026</p>
+
+  <div class="card">
+    <strong>Short version:</strong> CornerFloat does not operate an account service, analytics service, or advertising service. Its settings and workspace library stay on your Mac. Websites you open remain governed by those websites’ own privacy policies.
+  </div>
+
+  <h2>Data CornerFloat stores</h2>
+  <p>CornerFloat stores preferences, user-defined Quick Sites (names, aliases, and destination URLs), favorites, recent destinations, and saved workspace layouts locally in your macOS user account. Web sign-in sessions, cookies, and website data are stored by Apple WebKit’s persistent website data store. Downloads are saved only to a location you select.</p>
+  <p>Settings can export the CornerFloat library as versioned JSON. The export contains those library collections only; it does not contain website cookies, passwords, account sessions, downloads, or WebKit website data. Import validates and previews the complete file before asking to replace the current library.</p>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li>Ordinary web panels require no special macOS privacy permission.</li>
+    <li>Launch at Login is registered with the macOS Login Items service only after you change that switch in Settings.</li>
+    <li>A local source build hides the release-only Passkey action. In an eligible signed release, Passkey access is requested only after you choose <strong>Enable or Review Passkey Access…</strong>; it is never requested at launch. macOS controls whether the browser may use passkeys from Apple Passwords or compatible credential managers.</li>
+  </ul>
+
+  <h2>Network requests</h2>
+  <p>Network traffic comes from websites you choose to open and, when automatic updates are enabled, from the configured CornerFloat update feed. A feed request may include standard HTTP information such as app version, macOS version, IP address, and user agent. CornerFloat adds no cross-site tracking or advertising identifiers.</p>
+
+  <h2>Third-party websites</h2>
+  <p>Google, Microsoft, ChatGPT, and other sites may collect information under their own terms. CornerFloat does not control those services. OAuth and passkey prompts are handled by macOS, AuthenticationServices, WebKit, and the corresponding identity provider. CornerFloat does not copy passkeys into its own library.</p>
+
+  <h2>Deleting local data</h2>
+  <p>You can clear recent destinations from Library and export a backup from <strong>Settings → Local Data</strong>. To remove Quick Sites, favorites, recents, and saved workspaces, quit CornerFloat and delete <code>~/Library/Application Support/CornerFloat</code>. Preferences are stored separately by macOS; while CornerFloat is quit, run <code>defaults delete com.calvinkai.cornerfloat</code> to reset them. WebKit cookies and website data are also separate and must be removed from the app’s WebKit data in your macOS user Library if you want to clear website sessions.</p>
+
+  <h2>Changes and support</h2>
+  <p>The effective date above will change when this policy materially changes. Open <strong>CornerFloat → Support</strong> for troubleshooting, diagnostics, and data-removal instructions.</p>
+</main>
+</body>
+</html>

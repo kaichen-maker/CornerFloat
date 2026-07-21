@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CornerFloat Support</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { max-width: 720px; margin: 0 auto; padding: 44px 34px 64px; }
+    h1 { font-size: 34px; letter-spacing: -.025em; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 30px 0 8px; }
+    p, li { font-size: 15px; line-height: 1.55; }
+    .meta { color: color-mix(in srgb, CanvasText 60%, transparent); }
+    .card { padding: 18px 20px; border-radius: 18px; background: color-mix(in srgb, CanvasText 7%, transparent); }
+    kbd, code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+    kbd { padding: 2px 6px; border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: 5px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Support</h1>
+  <p class="meta">CornerFloat for macOS</p>
+
+  <div class="card">
+    <strong>Fast recovery:</strong> use the menu-bar CornerFloat icon even when every panel is hidden. Press <kbd>⇧⌘Space</kbd> by default to show or hide all panels; choose another preset under <strong>Settings → Global Shortcut</strong> if it conflicts. Choose <strong>Quit CornerFloat</strong> to stop the app completely.
+  </div>
+
+  <h2>A website will not load or sign in</h2>
+  <ul>
+    <li>Check the in-panel error message. Choose <strong>Try Again</strong> only when it is offered; CornerFloat never silently replays a failed form POST.</li>
+    <li>Open the page in your default browser to confirm the service is online.</li>
+    <li>OAuth popups open in a new CornerFloat tab when the provider permits embedded sign-in. Passkeys use a separate macOS system authorization flow.</li>
+    <li>CornerFloat permits ChatGPT's Google redirect to continue in the panel and identifies itself truthfully as CornerFloat. Google may still reject OAuth in WKWebView; if it does, use More → Open in Default Browser. That browser's Cookie session remains separate.</li>
+  </ul>
+
+  <h2>A Quick Site does not open</h2>
+  <p>Open <strong>Windows &amp; Library → Quick Sites</strong> and confirm that the alias is unique and the destination is a complete HTTP or HTTPS URL. Shortcut words ignore capitalization, spaces, accents, and character width. If no alias matches, CornerFloat treats the text as a normal search.</p>
+
+  <h2>A website cannot use a passkey</h2>
+  <p>A local source build hides the release-only Passkey action. In an eligible signed release, CornerFloat never requests passkey access at launch. Choose <strong>CornerFloat → Enable or Review Passkey Access…</strong>. If access is off, open System Settings → Privacy &amp; Security → Passkeys Access for Web Browsers, enable CornerFloat, and reload the sign-in page. If the setting is unavailable on a managed Mac, contact its administrator.</p>
+  <p>A public build also needs the Apple-approved Web Browser Public Key Credential entitlement, Developer ID signing, and a matching embedded Developer ID provisioning profile. Automated source tests verify the authorization-state logic without exposing an unusable menu, but an ad-hoc build is not a valid end-to-end cross-site passkey test.</p>
+
+  <h2>A panel is hard to find</h2>
+  <p>Use <strong>Window → Move to Bottom Right</strong>, or reopen a saved workspace. CornerFloat repairs off-screen panel positions after display changes and wake. If edge auto-hide is enabled, move the pointer to the screen edge to reveal the panel.</p>
+
+  <h2>Back up or move the library</h2>
+  <p>Use <strong>Settings → Local Data</strong> to export, import, or reveal the versioned JSON library. Import validates and previews the file, then asks before replacing favorites, recents, Quick Sites, and saved workspaces. It does not close panels or alter website cookies and sign-ins.</p>
+
+  <h2>Reset local data</h2>
+  <p>Quit CornerFloat and remove <code>~/Library/Application Support/CornerFloat</code> to delete Quick Sites, favorites, recents, and saved workspaces. To reset app preferences too, run <code>defaults delete com.calvinkai.cornerfloat</code> while CornerFloat is quit. WebKit cookies and website data are separate; remove the app’s WebKit data from your macOS user Library only if you also want to clear website sessions. These actions cannot be undone.</p>
+
+  <h2>Information to include in a support request</h2>
+  <p>Include the CornerFloat version and build number, macOS version, Mac model/architecture, the page or feature involved, exact steps, and a screenshot with private information removed. The app’s Support window provides a <strong>Copy Diagnostics</strong> button that gathers only these non-secret system details.</p>
+
+  <h2>Security</h2>
+  <p>Do not include passwords, passkeys, session cookies, authentication codes, or private screenshots in a report. Verify that public releases are Developer ID signed and notarized before installing.</p>
+</main>
+</body>
+</html>
