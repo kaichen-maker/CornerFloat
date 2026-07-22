@@ -20,7 +20,15 @@ SPARKLE_MACHO_RELATIVE_PATHS=(
     "Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer"
     "Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 )
+SPARKLE_SIGNABLE_RELATIVE_PATHS=(
+    "Versions/B/Autoupdate"
+    "Versions/B/Updater.app"
+    "Versions/B/XPCServices/Installer.xpc"
+    "Versions/B/XPCServices/Downloader.xpc"
+    "."
+)
 VALIDATOR="$ROOT/scripts/validate_release.py"
+BASE_SIGNING_ENTITLEMENTS_FILE="$ROOT/Resources/CornerFloat.entitlements"
 LOCAL_LOOPBACK_FEED=false
 
 if [[ "$UNIVERSAL" != "0" && "$UNIVERSAL" != "1" ]]; then
@@ -38,6 +46,7 @@ if [[ -n "$SIGNING_ENTITLEMENTS_FILE" ]]; then
     SIGNING_MODE_ARGS+=(--signing-entitlements "$SIGNING_ENTITLEMENTS_FILE")
 fi
 SIGNING_MODE="$(python3 "$VALIDATOR" "${SIGNING_MODE_ARGS[@]}")"
+plutil -lint "$BASE_SIGNING_ENTITLEMENTS_FILE" >/dev/null
 if [[ "$SIGN_IDENTITY" == "-" && "$SIGNING_MODE" != "baseline" ]]; then
     echo "Passkey-enabled signing requires a Developer ID identity, not an ad-hoc signature." >&2
     exit 1
@@ -206,6 +215,12 @@ if [[ "$SIGN_IDENTITY" == "-" ]]; then
     # signature: macOS rejects that process before launch. A Developer ID build
     # includes it only when a validated profile/entitlements pair is supplied.
     codesign --force --deep --sign - "$APP"
+    # Apply microphone access only to CornerFloat itself. Passing entitlements
+    # to a recursive signature would incorrectly grant the same capability to
+    # Sparkle's updater and XPC helpers.
+    codesign --force --sign - \
+        --entitlements "$BASE_SIGNING_ENTITLEMENTS_FILE" \
+        "$APP"
 else
     if [[ "$SIGNING_MODE" == "passkey" ]]; then
         cp "$DEVELOPER_ID_PROVISIONING_PROFILE_FILE" "$CONTENTS/embedded.provisionprofile"
@@ -230,11 +245,34 @@ else
     if [[ "$SIGNING_MODE" == "passkey" ]]; then
         codesign "${SIGN_FLAGS[@]}" --entitlements "$SIGNING_ENTITLEMENTS_FILE" "$APP"
     else
-        codesign "${SIGN_FLAGS[@]}" "$APP"
+        codesign "${SIGN_FLAGS[@]}" \
+            --entitlements "$BASE_SIGNING_ENTITLEMENTS_FILE" \
+            "$APP"
     fi
 fi
 
 codesign --verify --deep --strict --verbose=2 "$APP"
+
+validate_nested_media_entitlements() (
+    local temporary_directory relative_path signed_entitlements key_path
+    temporary_directory="$(mktemp -d /tmp/CornerFloat-nested-entitlements.XXXXXX)"
+    trap 'rm -rf "$temporary_directory"' EXIT
+    for relative_path in "${SPARKLE_SIGNABLE_RELATIVE_PATHS[@]}"; do
+        signed_entitlements="$temporary_directory/$(printf '%s' "$relative_path" | tr '/ ' '__').plist"
+        codesign --display --entitlements :- \
+            "$CONTENTS/Frameworks/Sparkle.framework/$relative_path" \
+            >"$signed_entitlements" 2>/dev/null
+        for key_path in \
+            'com\.apple\.security\.device\.audio-input' \
+            'com\.apple\.security\.device\.camera'; do
+            if plutil -extract "$key_path" raw "$signed_entitlements" >/dev/null 2>&1; then
+                echo "Sparkle nested code must not inherit media-capture entitlement $key_path: $relative_path" >&2
+                exit 1
+            fi
+        done
+    done
+)
+validate_nested_media_entitlements
 
 if [[ "$UNIVERSAL" == "1" ]]; then
     validate_architecture_set \

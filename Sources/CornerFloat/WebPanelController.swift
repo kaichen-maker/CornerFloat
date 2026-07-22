@@ -1157,6 +1157,31 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
 
     func webView(
         _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping WebKitCallback1<WKPermissionDecision>
+    ) {
+        let capture: BrowserSupport.MediaCaptureKind
+        switch type {
+        case .microphone:
+            capture = .microphone
+        case .camera:
+            capture = .camera
+        case .cameraAndMicrophone:
+            capture = .cameraAndMicrophone
+        @unknown default:
+            capture = .unknown
+        }
+        let decision = BrowserSupport.mediaCaptureDecision(
+            scheme: origin.protocol,
+            capture: capture
+        )
+        decisionHandler(decision == .prompt ? .prompt : .deny)
+    }
+
+    func webView(
+        _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping WebKitCallback0

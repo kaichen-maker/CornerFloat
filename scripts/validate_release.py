@@ -22,6 +22,8 @@ DEVELOPER_ID_PATTERN = re.compile(
     r"Developer ID Application: [^\"\r\n]+ \(([A-Z0-9]{10})\)"
 )
 PASSKEY_ENTITLEMENT = "com.apple.developer.web-browser.public-key-credential"
+AUDIO_INPUT_ENTITLEMENT = "com.apple.security.device.audio-input"
+CAMERA_ENTITLEMENT = "com.apple.security.device.camera"
 MAC_APPLICATION_IDENTIFIER = "com.apple.application-identifier"
 TEAM_IDENTIFIER_ENTITLEMENT = "com.apple.developer.team-identifier"
 MINIMUM_PROFILE_VALIDITY = dt.timedelta(days=30)
@@ -328,20 +330,36 @@ def validate_entitlements(args: argparse.Namespace) -> None:
             fail(f"cannot read signed entitlements {args.entitlements_plist}: {error}")
     if not isinstance(entitlements, dict):
         fail("signed entitlements must be a property-list dictionary")
+    if entitlements.get(AUDIO_INPUT_ENTITLEMENT) is not True:
+        fail(
+            "signed app is missing the microphone Audio Input entitlement "
+            f"{AUDIO_INPUT_ENTITLEMENT!r}"
+        )
+    if CAMERA_ENTITLEMENT in entitlements:
+        fail(
+            "signed app must not contain the out-of-scope Camera entitlement "
+            f"{CAMERA_ENTITLEMENT!r}"
+        )
     if args.passkey_policy == "required":
         if entitlements.get(PASSKEY_ENTITLEMENT) is not True:
             fail(
                 "signed app is missing the approved Web Browser Public Key "
                 f"Credential entitlement {PASSKEY_ENTITLEMENT!r}"
             )
-        print(f"Signed entitlement OK: {PASSKEY_ENTITLEMENT}=true")
+        print(
+            "Signed entitlements OK: microphone Audio Input and managed "
+            "Passkey access are enabled"
+        )
         return
     if PASSKEY_ENTITLEMENT in entitlements:
         fail(
             "baseline signed app must not contain the Web Browser Public Key "
             f"Credential entitlement {PASSKEY_ENTITLEMENT!r}"
         )
-    print("Baseline signed entitlements OK: no managed Passkey entitlement")
+    print(
+        "Baseline signed entitlements OK: microphone Audio Input is enabled "
+        "and no managed Passkey entitlement is present"
+    )
 
 
 def validate_signing_mode(args: argparse.Namespace) -> None:
@@ -489,6 +507,7 @@ def validate_provisioning_profile(args: argparse.Namespace) -> None:
         MAC_APPLICATION_IDENTIFIER: expected_application_identifier,
         TEAM_IDENTIFIER_ENTITLEMENT: args.team_id,
         PASSKEY_ENTITLEMENT: True,
+        AUDIO_INPUT_ENTITLEMENT: True,
     }
     if args.signed_entitlements_plist:
         try:

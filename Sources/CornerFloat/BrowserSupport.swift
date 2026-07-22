@@ -1,6 +1,18 @@
 import Foundation
 
 enum BrowserSupport {
+    enum MediaCaptureKind: Equatable {
+        case microphone
+        case camera
+        case cameraAndMicrophone
+        case unknown
+    }
+
+    enum MediaCaptureDecision: Equatable {
+        case prompt
+        case deny
+    }
+
     enum ExternalNavigationDisposition: Equatable {
         case block
         case confirmBeforeOpening
@@ -58,6 +70,19 @@ enum BrowserSupport {
     static func isWebURL(_ url: URL?) -> Bool {
         guard let scheme = url?.scheme?.lowercased() else { return false }
         return scheme == "http" || scheme == "https"
+    }
+
+    /// Keep website media access behind both of WebKit's privacy boundaries:
+    /// a secure origin prompt and the user's macOS microphone decision. Camera
+    /// capture is outside CornerFloat's current scope and remains unavailable.
+    static func mediaCaptureDecision(
+        scheme: String?,
+        capture: MediaCaptureKind
+    ) -> MediaCaptureDecision {
+        guard scheme?.lowercased() == "https", capture == .microphone else {
+            return .deny
+        }
+        return .prompt
     }
 
     /// Only replay requests whose semantics are read-only. In particular, an

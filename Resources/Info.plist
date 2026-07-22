@@ -38,6 +38,8 @@
     <string>11</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Calvin Kai.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>CornerFloat allows websites you choose to use the microphone for voice input and calls after you approve access.</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>

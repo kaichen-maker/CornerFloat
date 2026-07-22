@@ -19,7 +19,7 @@
 <body>
 <main>
   <h1>Privacy Policy</h1>
-  <p class="meta">CornerFloat · Effective July 20, 2026</p>
+  <p class="meta">CornerFloat · Effective July 22, 2026</p>
 
   <div class="card">
     <strong>Short version:</strong> CornerFloat does not operate an account service, analytics service, or advertising service. Its settings and workspace library stay on your Mac. Websites you open remain governed by those websites’ own privacy policies.
@@ -31,7 +31,9 @@
 
   <h2>Permissions</h2>
   <ul>
-    <li>Ordinary web panels require no special macOS privacy permission.</li>
+    <li>Ordinary web panels do not themselves need a special macOS privacy permission.</li>
+    <li>When an HTTPS website requests the microphone—normally after you start voice or dictation—CornerFloat allows WebKit to present a decision. macOS permission for CornerFloat and WebKit permission for that website are separate, user-controlled choices; neither is granted automatically.</li>
+    <li>Camera requests, including combined camera-and-microphone requests, are denied.</li>
     <li>Launch at Login is registered with the macOS Login Items service only after you change that switch in Settings.</li>
     <li>A local source build hides the release-only Passkey action. In an eligible signed release, Passkey access is requested only after you choose <strong>Enable or Review Passkey Access…</strong>; it is never requested at launch. macOS controls whether the browser may use passkeys from Apple Passwords or compatible credential managers.</li>
   </ul>
@@ -41,6 +43,7 @@
 
   <h2>Third-party websites</h2>
   <p>Google, Microsoft, ChatGPT, and other sites may collect information under their own terms. CornerFloat does not control those services. OAuth and passkey prompts are handled by macOS, AuthenticationServices, WebKit, and the corresponding identity provider. CornerFloat does not copy passkeys into its own library.</p>
+  <p>CornerFloat does not itself record, store, or upload microphone audio. After you approve both microphone permissions, audio is captured for and handled by the HTTPS website you selected under that website’s terms and privacy policy. That website may transmit or retain audio independently of CornerFloat.</p>
 
   <h2>Deleting local data</h2>
   <p>You can clear recent destinations from Library and export a backup from <strong>Settings → Local Data</strong>. To remove Quick Sites, favorites, recents, and saved workspaces, quit CornerFloat and delete <code>~/Library/Application Support/CornerFloat</code>. Preferences are stored separately by macOS; while CornerFloat is quit, run <code>defaults delete com.calvinkai.cornerfloat</code> to reset them. WebKit cookies and website data are also separate and must be removed from the app’s WebKit data in your macOS user Library if you want to clear website sessions.</p>

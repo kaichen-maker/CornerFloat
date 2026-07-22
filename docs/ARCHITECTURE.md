@@ -12,8 +12,8 @@ tabs and website data.
 It is not a browser extension, remote-control service, or plugin host. Keeping
 those boundaries explicit is part of the product's privacy model.
 
-The decision to retire native window mirroring and keep the core permission-free
-is recorded in
+The decision to retire native window mirroring and keep ordinary browsing and
+global access permission-free is recorded in
 [`docs/decisions/0001-web-workspaces-without-window-mirroring.md`](decisions/0001-web-workspaces-without-window-mirroring.md).
 
 ## Component map
@@ -23,7 +23,7 @@ is recorded in
 | Application lifecycle | `main.swift`, `AppController.swift` | Start the menu-bar app, own controllers, coordinate panels, onboarding, sleep/wake, and app-level actions |
 | Menus and global entry points | `MainMenuController.swift`, `StatusBarController.swift`, `GlobalHotKeyController.swift`, `LaunchAtLoginController.swift` | Native menus, status item, configurable permission-free hot key, and user-controlled Login Item registration |
 | Floating window foundation | `FloatingPanelController.swift`, `WindowGeometry.swift`, `GlassUI.swift` | Panel style, native resizing, placement, Spaces behavior, edge auto-hide, and material fallback |
-| Browser | `WebPanelController.swift`, `BrowserComponents.swift`, `BrowserSupport.swift`, `SmartAddressResolver.swift` | Tabs, WebKit delegates, address resolution, navigation safety, uploads, downloads, dialogs, and recovery UI |
+| Browser | `WebPanelController.swift`, `BrowserComponents.swift`, `BrowserSupport.swift`, `SmartAddressResolver.swift` | Tabs, WebKit delegates, address resolution, navigation and media-capture policy, uploads, downloads, dialogs, and recovery UI |
 | Local library | `WorkspaceLibrary.swift`, `WorkspaceLibraryController.swift` | Quick Sites, favorites, recents, saved layouts, persistence, and the management window |
 | Passkeys | `PasskeyAuthorization.swift` | User-triggered browser passkey authorization state and recovery guidance |
 | Updates | `UpdateController.swift` plus release scripts | Sparkle wiring for configured releases and offline-safe behavior for development builds |
@@ -72,6 +72,23 @@ resolver tests together. User-defined aliases belong in the versioned local
 library and must reject duplicate normalized aliases. Do not add a built-in
 shortcut that silently sends unexpected data to a new service.
 
+## Website media-capture boundary
+
+Ordinary browser features do not themselves ask for microphone or camera access. The
+`WKUIDelegate` media callback maps WebKit capture types through the testable
+`BrowserSupport` policy. Only a microphone request from an HTTPS origin returns
+`prompt`; insecure, camera, combined camera-and-microphone, and unknown requests
+return `deny`. A website controls when it requests access; returning `prompt`
+does not grant capture, because the user still controls
+both macOS microphone access for CornerFloat and WebKit permission for the
+requesting website.
+
+The app declares `NSMicrophoneUsageDescription`, and every local or formal
+signature carries `com.apple.security.device.audio-input`. It deliberately has
+no camera usage declaration or camera entitlement. CornerFloat does not own an
+audio recorder, audio store, or audio upload path; after approval, the selected
+website handles microphone audio under its own privacy policy.
+
 ## Persistence
 
 `WorkspaceLibrary` stores Quick Sites, favorites, recents, workspace descriptors,
@@ -99,7 +116,7 @@ The private Apple and Sparkle credentials never belong in the repository. See
 ## Testing strategy
 
 - Pure helper tests exercise address resolution, filenames, retry safety, error
-  mapping, and external schemes.
+  mapping, media-capture policy, and external schemes.
 - Authorization tests use fakes to prove passkey prompts remain user-triggered.
 - WebKit integration tests use a loopback-only fixture and production browser
   controller code.
@@ -107,8 +124,10 @@ The private Apple and Sparkle credentials never belong in the repository. See
   services.
 - AppKit acceptance runs real windows, the Carbon hot key, and lifecycle/energy
   diagnostics on a logged-in desktop.
-- Manual release checks cover permission prompts, accounts, displays, sleep/wake,
-  signing, notarization, and installed updates.
+- Repository and release validators verify the microphone purpose string and
+  audio-input entitlement in source, built, baseline, and Passkey signing paths.
+- Manual release checks cover real website microphone prompts, accounts,
+  displays, sleep/wake, signing, notarization, and installed updates.
 
 CI evidence must not be presented as proof of a hardware-, account-, or
 permission-dependent behavior that CI did not perform.

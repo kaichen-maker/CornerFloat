@@ -74,6 +74,12 @@ CornerFloat 是菜单栏应用，正常运行时不会出现在 Dock。打开后
 但不包含正式发行版专用的自动更新通道和 Apple 批准的跨网站 Passkey 权限。
 部分 OAuth 服务也可能根据自己的政策要求通过 **More → Open in Default Browser** 登录。
 
+网站语音和听写功能只对 HTTPS 页面开放。当网站请求麦克风时（通常发生在你点击
+voice、dictate 或麦克风按钮之后），CornerFloat 会让 WebKit 询问你，而不会自动
+授权。首次使用时通常要分别同意 macOS 的 CornerFloat 麦克风权限和 WebKit 中
+该网站自己的权限；请按系统实际显示的顺序分别响应两个提示。摄像头请求以及
+同时请求摄像头和麦克风的功能会被拒绝。
+
 ### 只想先体验，不安装
 
 在源码文件夹中运行：
@@ -152,6 +158,8 @@ make uninstall
 - 可在 **Windows & Library → Quick Sites** 新增自己的快捷网站。例如把 `UniMail`、`校园邮箱` 指向学校邮箱；之后在任意 CornerFloat 地址栏输入其中一个快捷词即可直接打开。快捷网站支持新增、编辑、删除和菜单栏快速启动，并只保存在本机。
 - `example.com` 会自动补全 `https://`；`localhost:3000` 等本地开发地址会使用 `http://`。
 - 每个网页面板支持多个标签页，`⌘T` 新建标签页，`⌘W` 关闭当前标签页。
+- HTTPS 网站可以请求麦克风（通常发生在你启动语音或听写之后）；CornerFloat
+  本身不会在启动时主动申请，也不会自动批准网站权限。摄像头请求保持拒绝。
 - CornerFloat 声明可接收 HTTP/HTTPS 链接，以满足系统浏览器 Passkey 能力要求；从其他应用发送来的网页会优先在现有 CornerFloat 面板的新标签中打开。它不会擅自把自己设为系统默认浏览器。
 - 使用 WebKit 的持久网站数据存储，同一 macOS 用户中的 Cookie 和登录会话可在后续启动中继续使用。
 - 网站弹出的 OAuth 窗口会在新标签页中打开。CornerFloat 不再预先取消 ChatGPT 的 Google 登录跳转；它使用 WebKit 自己生成的 user-agent 并追加真实的 `CornerFloat/<version>` 产品标识，不伪装成 Safari、Chrome 或其他浏览器，也不改写认证请求。工具栏会持续显示当前网址，并提供可点击的连接安全信息。[Google 的当前政策](https://developers.google.com/identity/protocols/oauth2/policies#secure-browsers)仍可能拒绝 `WKWebView` 中的 OAuth；若服务方实际拒绝，可从 **More → Open in Default Browser** 继续。默认浏览器与 CornerFloat 的 Cookie 会话彼此独立。
@@ -219,13 +227,18 @@ make uninstall
 | --- | --- | --- |
 | 网页、ChatGPT、搜索、快捷网站、收藏、工作区 | **无特殊权限** | 网页直接显示在 CornerFloat 自己的 WebKit 窗口中 |
 | 全局 `⇧⌘Space` | **无特殊权限** | 通过 macOS 全局快捷键 API 注册，不读取键盘内容 |
+| HTTPS 网站请求语音或听写麦克风 | **macOS 麦克风权限 + 该网站的 WebKit 权限（按需）** | 两层授权都由用户决定；CornerFloat 不会自动批准 |
 | 网站 Passkey（可选正式发行能力） | **Passkeys Access for Web Browsers（按需）** | 只有带匹配 provisioning profile 的正式构建才显示授权入口；源码构建不会显示不可用菜单 |
 
-网页面板不需要特殊的 macOS 隐私权限。源码构建也不需要 Passkey 特殊授权，并会隐藏不可用的 Passkey 和自动更新菜单。
+普通网页面板本身不需要特殊的 macOS 隐私权限。源码构建也不需要 Passkey 特殊
+授权，并会隐藏不可用的 Passkey 和自动更新菜单。HTTPS 网站请求麦克风时，
+WebKit 可以显示授权流程，但在用户批准前不能取得音频。
 
 > 系统授权逻辑已经接通，但可跨任意网站使用 Passkey 的正式发行版还必须由 Apple 为开发者团队批准 `com.apple.developer.web-browser.public-key-credential` managed entitlement，以该团队的 Developer ID 正式签名，并嵌入匹配、未过期的 Developer ID distribution provisioning profile。源码构建会隐藏这个不可用入口；自动测试仍会验证授权状态逻辑，但不能作为真实跨站 Passkey 验收结果。
 
-CornerFloat 不会调用摄像头或麦克风。
+CornerFloat 会拒绝网站的摄像头请求，以及摄像头与麦克风的组合请求。它不会自动
+批准麦克风权限，也不会自行录音、保存或上传音频。两层权限获准后，音频由你选择
+的网站依据其隐私政策接收和处理。
 
 ## 多屏、Spaces 与能耗
 
@@ -238,6 +251,9 @@ CornerFloat 不会调用摄像头或麦克风。
 - CornerFloat 不提供账户、广告或分析服务。
 - Quick Sites、Favorites、Recents、Saved Workspaces 和偏好保存在本机。
 - 网页流量、登录和上传由你打开的网站处理，并受该网站隐私政策约束。
+- 网站语音或听写只允许 HTTPS 页面请求，并且必须分别通过 macOS 和网站层授权；
+  若曾拒绝，可在 **系统设置 → 隐私与安全性 → 麦克风** 中重新启用
+  CornerFloat，再重新载入网页。
 - WebKit 在本机保存网站 Cookie 与会话；下载只写入你在保存面板中选择的位置。
 - 可从应用菜单打开 **Privacy Policy** 和 **CornerFloat Support**。Support 页面可复制不含凭据的版本、系统和架构诊断信息。
 - 删除快捷网站、收藏、最近访问和工作区：退出 CornerFloat 后移除 `~/Library/Application Support/CornerFloat`。偏好由 macOS 另行保存；完全重置偏好需在退出后运行 `defaults delete com.calvinkai.cornerfloat`。WebKit Cookie 与网站数据也独立于这两者。

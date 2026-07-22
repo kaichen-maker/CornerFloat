@@ -41,6 +41,16 @@
   <p>A local source build hides the release-only Passkey action. In an eligible signed release, CornerFloat never requests passkey access at launch. Choose <strong>CornerFloat → Enable or Review Passkey Access…</strong>. If access is off, open System Settings → Privacy &amp; Security → Passkeys Access for Web Browsers, enable CornerFloat, and reload the sign-in page. If the setting is unavailable on a managed Mac, contact its administrator.</p>
   <p>A public build also needs the Apple-approved Web Browser Public Key Credential entitlement, Developer ID signing, and a matching embedded Developer ID provisioning profile. Automated source tests verify the authorization-state logic without exposing an unusable menu, but an ad-hoc build is not a valid end-to-end cross-site passkey test.</p>
 
+  <h2>Website voice or dictation does not start</h2>
+  <ol>
+    <li>Confirm the address begins with <code>https://</code>. CornerFloat denies microphone requests from insecure pages and denies every camera or combined camera-and-microphone request.</li>
+    <li>Click the website’s voice, dictate, or microphone control again. CornerFloat itself does not request microphone access at launch, although a website can choose when its code asks for access.</li>
+    <li>Respond to both the macOS CornerFloat microphone prompt and the requesting website’s own WebKit microphone prompt in the order they appear. These are separate decisions and neither is approved automatically.</li>
+    <li>If macOS access was previously denied, quit CornerFloat, open <strong>System Settings → Privacy &amp; Security → Microphone</strong>, enable CornerFloat, reopen it, and reload the HTTPS page.</li>
+    <li>If access is already enabled, review the website’s own microphone or site settings, account requirements, and service status. Test the same feature in the default browser to distinguish a site problem from an app problem.</li>
+  </ol>
+  <p>CornerFloat does not itself record, store, or upload audio. Once both permissions are granted, the selected website handles microphone audio under its own privacy policy. Stop voice mode on the website when finished. If a feature requires a camera, use a browser that supports that request because CornerFloat keeps camera capture outside its current scope.</p>
+
   <h2>A panel is hard to find</h2>
   <p>Use <strong>Window → Move to Bottom Right</strong>, or reopen a saved workspace. CornerFloat repairs off-screen panel positions after display changes and wake. If edge auto-hide is enabled, move the pointer to the screen edge to reveal the panel.</p>
 

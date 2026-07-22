@@ -21,6 +21,9 @@ safer daily-use utility and a more reproducible open-source project.
 - **Fewer accidental losses.** Replacing or closing windows, clearing all
   recents, and deleting local library records now require specific native
   confirmations that explain what changes and what remains.
+- **Use website voice and dictation safely.** An HTTPS site can ask for the
+  microphone, normally after you start its voice or dictate feature. macOS and
+  the site each keep their own approval, while camera access remains blocked.
 
 ## Reliability and contributor improvements
 
@@ -46,7 +49,12 @@ safer daily-use utility and a more reproducible open-source project.
 CornerFloat requires macOS 14 or later. Normal panels, tabs, search, Quick
 Sites, workspaces, global shortcuts, library portability, and Login Item control
 need no Accessibility, Input Monitoring, Screen Recording, camera, or microphone
-permission.
+permission by themselves. When an HTTPS website requests the microphone, WebKit
+may prompt. The user must separately approve macOS access
+for CornerFloat and access for that website. CornerFloat does not automatically
+grant access or itself record, store, or upload audio; the selected website
+handles approved audio under its own policy. Camera and combined capture remain
+denied.
 
 Google, Microsoft, or an organization may still reject OAuth inside `WKWebView`.
 CornerFloat does not bypass provider policy or copy a system-browser session;

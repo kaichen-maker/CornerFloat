@@ -376,8 +376,16 @@ def main() -> None:
 
         entitlements = root / "signed-entitlements.plist"
         passkey_key = "com.apple.developer.web-browser.public-key-credential"
+        audio_input_key = "com.apple.security.device.audio-input"
+        camera_key = "com.apple.security.device.camera"
         with entitlements.open("wb") as stream:
-            plistlib.dump({passkey_key: True}, stream)
+            plistlib.dump(
+                {
+                    audio_input_key: True,
+                    passkey_key: True,
+                },
+                stream,
+            )
         entitlement_result = run_entitlements_validator(
             entitlements,
             passkey_policy="required",
@@ -395,7 +403,13 @@ def main() -> None:
         )
 
         with entitlements.open("wb") as stream:
-            plistlib.dump({passkey_key: False}, stream)
+            plistlib.dump(
+                {
+                    audio_input_key: True,
+                    passkey_key: False,
+                },
+                stream,
+            )
         expect_failure(
             run_entitlements_validator(
                 entitlements,
@@ -412,33 +426,77 @@ def main() -> None:
         )
 
         with entitlements.open("wb") as stream:
-            plistlib.dump({"com.apple.security.cs.disable-library-validation": True}, stream)
+            plistlib.dump(
+                {
+                    audio_input_key: True,
+                    "com.apple.security.cs.disable-library-validation": True,
+                },
+                stream,
+            )
         baseline_result = run_entitlements_validator(
             entitlements,
             passkey_policy="forbidden",
         )
         if baseline_result.returncode != 0:
             raise SystemExit(
-                "baseline signed app without a Passkey entitlement was rejected: "
+                "baseline signed app with audio input and without a Passkey entitlement "
+                "was rejected: "
                 f"{baseline_result.stderr}"
             )
 
-        entitlements.write_bytes(b"")
-        empty_baseline_result = run_entitlements_validator(
-            entitlements,
-            passkey_policy="forbidden",
-        )
-        if empty_baseline_result.returncode != 0:
-            raise SystemExit(
-                "empty codesign entitlement output was rejected for a baseline release: "
-                f"{empty_baseline_result.stderr}"
+        with entitlements.open("wb") as stream:
+            plistlib.dump(
+                {"com.apple.security.cs.disable-library-validation": True},
+                stream,
             )
+        expect_failure(
+            run_entitlements_validator(
+                entitlements,
+                passkey_policy="forbidden",
+            ),
+            audio_input_key,
+        )
+
+        with entitlements.open("wb") as stream:
+            plistlib.dump({audio_input_key: False}, stream)
+        expect_failure(
+            run_entitlements_validator(
+                entitlements,
+                passkey_policy="forbidden",
+            ),
+            audio_input_key,
+        )
+
+        with entitlements.open("wb") as stream:
+            plistlib.dump(
+                {
+                    audio_input_key: True,
+                    camera_key: True,
+                },
+                stream,
+            )
+        expect_failure(
+            run_entitlements_validator(
+                entitlements,
+                passkey_policy="forbidden",
+            ),
+            camera_key,
+        )
+
+        entitlements.write_bytes(b"")
+        expect_failure(
+            run_entitlements_validator(
+                entitlements,
+                passkey_policy="forbidden",
+            ),
+            audio_input_key,
+        )
         expect_failure(
             run_entitlements_validator(
                 entitlements,
                 passkey_policy="required",
             ),
-            "signed app is missing the approved Web Browser Public Key Credential entitlement",
+            audio_input_key,
         )
 
         signing_mode_result = run_signing_mode_validator()
@@ -498,6 +556,7 @@ def main() -> None:
             ),
             "com.apple.developer.team-identifier": "ABCDE12345",
             "com.apple.developer.web-browser.public-key-credential": True,
+            "com.apple.security.device.audio-input": True,
         }
         if generated != expected_generated:
             raise SystemExit(
@@ -634,8 +693,9 @@ def main() -> None:
     print(
         "CornerFloat release-validator tests OK: versions and metadata are "
         "release-ready, architecture sets are exact, the local-test URL exception "
-        "is loopback-only, baseline signatures forbid Passkey entitlements, and "
-        "enhanced signatures require a matching Developer ID profile/entitlements pair"
+        "is loopback-only, every signature requires audio input, baseline signatures "
+        "forbid Passkey entitlements, and enhanced signatures require a matching "
+        "Developer ID profile/entitlements pair"
     )
 
 

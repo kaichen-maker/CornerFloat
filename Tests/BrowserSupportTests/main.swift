@@ -129,6 +129,56 @@ expect(
     "internal content connection state"
 )
 
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "https",
+        capture: .microphone
+    ) == .prompt,
+    "HTTPS microphone capture must ask the user"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "HTTPS",
+        capture: .microphone
+    ) == .prompt,
+    "media-capture scheme matching must be case-insensitive"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "http",
+        capture: .microphone
+    ) == .deny,
+    "insecure microphone capture must be denied"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: nil,
+        capture: .microphone
+    ) == .deny,
+    "microphone capture without a security scheme must be denied"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "https",
+        capture: .camera
+    ) == .deny,
+    "camera capture is outside CornerFloat's permission boundary"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "https",
+        capture: .cameraAndMicrophone
+    ) == .deny,
+    "combined camera and microphone capture must not bypass the camera denial"
+)
+expect(
+    BrowserSupport.mediaCaptureDecision(
+        scheme: "https",
+        capture: .unknown
+    ) == .deny,
+    "unknown capture types must fail closed"
+)
+
 let callback = URL(string: "microsoft-edge://oauth/callback")!
 expect(
     BrowserSupport.externalNavigationDisposition(
@@ -171,4 +221,4 @@ expect(
     "JavaScript URL from a web page"
 )
 
-print("CornerFloat browser-support tests OK: resolution, downloads, errors and external schemes")
+print("CornerFloat browser-support tests OK: resolution, downloads, errors, media capture and external schemes")

@@ -6,6 +6,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Privacy and support guidance now distinguishes permission-free browsing from
+  HTTPS website microphone requests: macOS and the site's WebKit permission
+  remain separate user choices, while camera access stays unavailable.
+
+### Fixed
+
+- Starting voice or dictation on an HTTPS website no longer terminates the web
+  content process. CornerFloat declares and signs the required audio-input
+  capability and lets WebKit prompt only for HTTPS microphone access;
+  insecure, camera, combined, and unknown capture requests fail closed.
+
 ## [0.8.0] - 2026-07-20
 
 ### Added

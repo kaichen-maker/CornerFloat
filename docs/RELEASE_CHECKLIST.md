@@ -98,7 +98,9 @@ Configure these in the protected `release` environment:
 - [ ] Move the target version from the changelog's `[Unreleased]` section into one exact dated `## [X.Y.Z] - YYYY-MM-DD` section, and start a new `[Unreleased]` section above it. The release metadata validator rejects source-preview or draft wording.
 - [ ] Confirm `Package.resolved` pins the intended Sparkle version.
 - [ ] Confirm `PRIVACY.md`, `SUPPORT.md`, the in-app pages, icon, and copyright are current.
-- [ ] Confirm `Resources/Info.plist` still declares HTTP and HTTPS handling. For a baseline release, the release script must extract the final signature entitlements and reject any occurrence of the managed Passkey entitlement or an embedded provisioning profile.
+- [ ] Confirm `Resources/Info.plist` still declares HTTP and HTTPS handling and contains a truthful, non-empty `NSMicrophoneUsageDescription`. Confirm the app has no camera usage description.
+- [ ] Confirm `Resources/CornerFloat.entitlements` enables `com.apple.security.device.audio-input` and does not enable camera capture. Extract the final signature entitlements from baseline and Passkey-enabled candidates and confirm the same audio-input boundary survives every signing path.
+- [ ] For a baseline release, confirm the release script rejects any occurrence of the managed Passkey entitlement or an embedded provisioning profile while preserving the required audio-input entitlement.
 - [ ] For an optional Passkey-enabled release, confirm the release script decodes and validates the Developer ID provisioning profile before building, derives the final `com.apple.application-identifier`, team identifier, and Passkey signing entitlements from that profile, then repeats an exact profile/signature/certificate comparison against both the signed app and the app extracted from the update ZIP.
 - [ ] Run `scripts/swiftpm.sh resolve` and `scripts/test.sh` locally.
 - [ ] On a logged-in macOS GUI session, run `scripts/acceptance-tests.sh`. It must prove the real Carbon shortcut callback, AppKit panel/menu smoke flow, edge hide/reveal, lifecycle JSON contract, and bounded idle CPU sampling. This safe suite does not replace the hardware acceptance section below.
@@ -123,6 +125,7 @@ The release job must stop rather than publish if any of these checks fail:
 
 - tag, marketing version, or build number validation;
 - Developer ID identity lookup;
+- a missing microphone purpose string or missing/false audio-input entitlement;
 - Hardened Runtime or nested Sparkle framework signing;
 - a missing, duplicate, or unexpected architecture in the CornerFloat executable or any Sparkle executable; formal release artifacts must contain exactly arm64 and x86_64;
 - a managed Web Browser Public Key Credential entitlement or embedded provisioning profile appearing in a baseline release;
@@ -158,6 +161,7 @@ SUPPORT.md
   ```
 
 - [ ] Confirm the displayed authority is the intended **Developer ID Application**, the Team ID is correct, and the `runtime` flag is present.
+- [ ] Confirm the final signature has `com.apple.security.device.audio-input = true`, has no camera entitlement, and the final app has no camera usage description.
 - [ ] For a baseline release, confirm `CornerFloat.app/Contents/embedded.provisionprofile` is absent. For a Passkey-enabled release, confirm it exists and decode it with `security cms -D -i`; confirm the Team ID, exact App ID, expiration, `ProvisionsAllDevices`, and Passkey entitlement match the final signature.
 - [ ] Run `lipo -archs` on `Contents/MacOS/CornerFloat`, `Sparkle`, `Autoupdate`, `Updater`, `Installer`, and `Downloader`; every result must contain exactly `arm64 x86_64` (order is not significant).
 - [ ] Validate the stapled app ticket:
@@ -226,6 +230,11 @@ Test on a Mac that does not have the development certificate or repository check
 - [ ] Open the DMG normally and drag CornerFloat into `/Applications`.
 - [ ] Launch it through Finder and confirm Gatekeeper does not show an unidentified-developer warning.
 - [ ] Complete onboarding and open a normal web panel without granting special macOS privacy access.
+- [ ] Before using any website media control, confirm CornerFloat has not asked for microphone or camera access.
+- [ ] On an HTTPS test page, click a microphone-only voice or dictate control. Confirm microphone permission is requested only after that action and that macOS and the requesting website remain separate user-controlled decisions. Respond to both prompts in the order the system presents them, then confirm audio capture starts without the web content process terminating or showing **Content failed to load**.
+- [ ] Stop voice mode and confirm capture ends. Quit and reopen CornerFloat, reload the same HTTPS page, and confirm normal browsing still does not start capture.
+- [ ] Repeat on a clean test account or reset privacy state, deny the macOS decision, and confirm the page remains alive. Enable CornerFloat under **System Settings → Privacy & Security → Microphone**, reload, and confirm the website can request again.
+- [ ] Request camera-only and combined camera-and-microphone capture from a controlled HTTPS fixture. Confirm both are denied and no camera permission prompt appears.
 - [ ] Confirm `Shift-Command-Space`, tabs, search, favorites, recents, saved workspaces, upload/download, and quit behavior.
 - [ ] From a logged-out or isolated website-data profile, open ChatGPT and
       complete **Continue with Google** inside the CornerFloat panel using a

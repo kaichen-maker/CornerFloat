@@ -86,6 +86,13 @@ favorites, and workspaces. It does not include the release-only automatic-update
 channel or Apple-approved cross-site passkey entitlement. Some OAuth providers
 may also require **More → Open in Default Browser** under their own policies.
 
+Website voice and dictation work only on HTTPS pages. When a site requests the
+microphone—normally after you click its voice or microphone control—CornerFloat
+lets WebKit ask rather than granting access automatically. The first use can
+require two separate choices: respond to the macOS CornerFloat prompt and the
+requesting website's WebKit prompt in the order the system presents them. A
+camera request, including a combined camera-and-microphone request, is denied.
+
 ### Try it without installing
 
 From the source folder, run the following commands to build and open a temporary
@@ -175,7 +182,8 @@ replacement.
   and full-screen auxiliary behavior.
 - Smart address bar for URLs, named destinations, and Google search.
 - Multiple browser tabs, persistent website sessions, upload/download, popups,
-  JavaScript dialogs, and actionable failure states.
+  JavaScript dialogs, secure website voice/dictation, and actionable failure
+  states.
 - Native Settings (`Command-,`) for launch behavior, Launch at Login, edge
   auto-hide, conflict-safe global shortcut presets, and local data portability.
 - Favorites, recent destinations, and saved multi-panel workspaces.
@@ -192,7 +200,9 @@ replacement.
   WebKit supplies a system browser engine without bundling Electron or Chromium.
 - **Narrow permission boundary:** normal browsing, workspaces, and the global
   show/hide shortcut request no Accessibility, Screen Recording, camera, or
-  microphone access.
+  microphone access by themselves. An HTTPS site can request the microphone,
+  but WebKit and macOS keep access behind user decisions; camera capture remains
+  denied.
 - **Defensive browser behavior:** unsafe address-bar schemes are blocked,
   external app launches require confirmation, and failed form submissions are
   never silently replayed.
@@ -277,17 +287,27 @@ while the app is active to exit completely.
 | Web panels, tabs, search, Quick Sites, favorites, workspaces | None | Content runs in CornerFloat's WebKit window |
 | Global show/hide shortcut | None | Uses the macOS global hot-key API and does not read typed keys |
 | Launch at Login | None | Uses the macOS Login Items service only after the user changes the Settings switch |
+| Microphone requested by an HTTPS website | macOS Microphone access and that website's WebKit permission, on demand | Both decisions remain under the user; CornerFloat never grants access automatically |
 | Website passkeys in an eligible signed release | Passkeys Access for Web Browsers, on demand | The menu appears only when the app contains the matching release provisioning profile |
 
-CornerFloat does not use the camera or microphone. Quick Sites, favorites,
-recents, and workspace layouts stay under the current macOS user's Application
-Support directory. Settings can export or import that library as inspectable
-JSON; WebKit manages site cookies and sessions separately and they are never
-included in the export.
+CornerFloat denies website camera and combined camera-and-microphone requests.
+It does not automatically approve microphone access, record audio itself, or
+store or upload audio. After both permissions are granted, the HTTPS website you
+chose receives and handles microphone audio under its own privacy policy.
+
+Quick Sites, favorites, recents, and workspace layouts stay under the current
+macOS user's Application Support directory. Settings can export or import that
+library as inspectable JSON; WebKit manages site cookies and sessions separately
+and they are never included in the export.
 
 Read [PRIVACY.md](PRIVACY.md) for the complete policy.
 
 ## Website compatibility
+
+For website voice or dictation, use the control on an HTTPS page. If access was
+previously denied, enable CornerFloat under **System Settings → Privacy &
+Security → Microphone**, reload the page, and review the website's own prompt or
+site settings. See [SUPPORT.md](SUPPORT.md) for the complete recovery steps.
 
 Google prohibits OAuth authorization inside application-controlled embedded
 browsers, and Microsoft or an organization may impose a similar restriction.
@@ -344,8 +364,9 @@ with complete Swift concurrency checking and warnings as errors. `make acceptanc
 opens AppKit windows and exercises the global shortcut and lifecycle diagnostics
 from a logged-in desktop.
 
-Physical display changes, system sleep, account sign-in, passkeys, Developer ID
-signing, notarization, and update installation require the manual
+Physical display changes, system sleep, account sign-in, website microphone
+capture, passkeys, Developer ID signing, notarization, and update installation
+require the manual
 evidence described in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
 
 No public binary has been released yet. The optional public-release path requires

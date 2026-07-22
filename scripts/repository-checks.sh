@@ -3,7 +3,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP="$ROOT/dist/CornerFloat.app"
 APP_RESOURCES="$ROOT/dist/CornerFloat.app/Contents/Resources"
+APP_INFO="$APP/Contents/Info.plist"
+SOURCE_ENTITLEMENTS="$ROOT/Resources/CornerFloat.entitlements"
+AUDIO_INPUT_ENTITLEMENT="com.apple.security.device.audio-input"
+AUDIO_INPUT_ENTITLEMENT_KEY_PATH='com\.apple\.security\.device\.audio-input'
+CAMERA_ENTITLEMENT="com.apple.security.device.camera"
+CAMERA_ENTITLEMENT_KEY_PATH='com\.apple\.security\.device\.camera'
 
 required_files=(
     README.md
@@ -24,6 +31,7 @@ required_files=(
     docs/images/cornerfloat-welcome.png
     docs/images/cornerfloat-settings.png
     docs/ROADMAP.md
+    Resources/CornerFloat.entitlements
     Sources/CornerFloat/LaunchAtLoginController.swift
     scripts/install.sh
     scripts/static_checks.py
@@ -59,6 +67,119 @@ while IFS= read -r -d '' shell_script; do
 done < <(find "$ROOT/scripts" -type f -name '*.sh' -print0)
 python3 "$ROOT/scripts/static_checks.py"
 plutil -lint "$ROOT/Resources/Info.plist" >/dev/null
+plutil -lint "$APP_INFO" >/dev/null
+plutil -lint "$SOURCE_ENTITLEMENTS" >/dev/null
+
+validate_info_plist_media_boundary() {
+    local info_plist="$1"
+    local microphone_usage_description microphone_usage_type
+    microphone_usage_type="$(
+        plutil -type NSMicrophoneUsageDescription "$info_plist" 2>/dev/null || true
+    )"
+    if [[ "$microphone_usage_type" != "string" ]]; then
+        echo "Microphone usage description must be a string: $info_plist" >&2
+        return 1
+    fi
+    microphone_usage_description="$(
+        plutil -extract NSMicrophoneUsageDescription raw "$info_plist" 2>/dev/null || true
+    )"
+    if [[ -z "${microphone_usage_description//[[:space:]]/}" ]]; then
+        echo "Microphone usage description is missing or empty: $info_plist" >&2
+        return 1
+    fi
+    if plutil -extract NSCameraUsageDescription xml1 -o - "$info_plist" \
+        >/dev/null 2>&1; then
+        echo "Camera usage description must remain absent: $info_plist" >&2
+        return 1
+    fi
+}
+
+for info_plist in "$ROOT/Resources/Info.plist" "$APP_INFO"; do
+    validate_info_plist_media_boundary "$info_plist"
+done
+
+test_info_plist_media_boundary() (
+    local fixture
+    fixture="$(mktemp "${TMPDIR:-/tmp}/CornerFloat-privacy-metadata.XXXXXX")"
+    trap 'rm -f "$fixture"' EXIT
+
+    cp "$ROOT/Resources/Info.plist" "$fixture"
+    plutil -replace NSMicrophoneUsageDescription -bool true "$fixture"
+    if validate_info_plist_media_boundary "$fixture" >/dev/null 2>&1; then
+        echo "Privacy metadata check accepted a non-string microphone description." >&2
+        exit 1
+    fi
+
+    cp "$ROOT/Resources/Info.plist" "$fixture"
+    plutil -insert NSCameraUsageDescription \
+        -json '{"unexpected":"dictionary"}' "$fixture"
+    if validate_info_plist_media_boundary "$fixture" >/dev/null 2>&1; then
+        echo "Privacy metadata check missed a non-string camera usage key." >&2
+        exit 1
+    fi
+)
+test_info_plist_media_boundary
+
+if [[ "$(
+    plutil -extract "$AUDIO_INPUT_ENTITLEMENT_KEY_PATH" raw "$SOURCE_ENTITLEMENTS" \
+        2>/dev/null || true
+)" != "true" ]]; then
+    echo "Source signing entitlements must contain $AUDIO_INPUT_ENTITLEMENT=true." >&2
+    exit 1
+fi
+if plutil -extract "$CAMERA_ENTITLEMENT_KEY_PATH" raw "$SOURCE_ENTITLEMENTS" \
+    >/dev/null 2>&1; then
+    echo "Source signing entitlements must not contain $CAMERA_ENTITLEMENT." >&2
+    exit 1
+fi
+
+SIGNED_ENTITLEMENTS="$(mktemp "${TMPDIR:-/tmp}/CornerFloat-signed-entitlements.XXXXXX")"
+cleanup_signed_entitlements() {
+    rm -f "$SIGNED_ENTITLEMENTS"
+}
+trap cleanup_signed_entitlements EXIT INT TERM
+if ! codesign --display --entitlements :- "$APP" >"$SIGNED_ENTITLEMENTS" 2>/dev/null; then
+    echo "Could not read entitlements from the built CornerFloat signature." >&2
+    exit 1
+fi
+if [[ "$(
+    plutil -extract "$AUDIO_INPUT_ENTITLEMENT_KEY_PATH" raw "$SIGNED_ENTITLEMENTS" \
+        2>/dev/null || true
+)" != "true" ]]; then
+    echo "Built CornerFloat signature must contain $AUDIO_INPUT_ENTITLEMENT=true." >&2
+    exit 1
+fi
+if plutil -extract "$CAMERA_ENTITLEMENT_KEY_PATH" raw "$SIGNED_ENTITLEMENTS" \
+    >/dev/null 2>&1; then
+    echo "Built CornerFloat signature must not contain $CAMERA_ENTITLEMENT." >&2
+    exit 1
+fi
+
+SPARKLE_VERSION="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+SPARKLE_SIGNABLES=(
+    "$SPARKLE_VERSION/Autoupdate"
+    "$SPARKLE_VERSION/Updater.app"
+    "$SPARKLE_VERSION/XPCServices/Installer.xpc"
+    "$SPARKLE_VERSION/XPCServices/Downloader.xpc"
+    "$APP/Contents/Frameworks/Sparkle.framework"
+)
+for sparkle_signable in "${SPARKLE_SIGNABLES[@]}"; do
+    nested_entitlements="$(mktemp "${TMPDIR:-/tmp}/CornerFloat-nested-entitlements.XXXXXX")"
+    if ! codesign --display --entitlements :- "$sparkle_signable" \
+        >"$nested_entitlements" 2>/dev/null; then
+        rm -f "$nested_entitlements"
+        echo "Could not read entitlements from nested Sparkle code: $sparkle_signable" >&2
+        exit 1
+    fi
+    for media_key_path in "$AUDIO_INPUT_ENTITLEMENT_KEY_PATH" "$CAMERA_ENTITLEMENT_KEY_PATH"; do
+        if plutil -extract "$media_key_path" raw "$nested_entitlements" >/dev/null 2>&1; then
+            rm -f "$nested_entitlements"
+            echo "Nested Sparkle code must not contain media-capture entitlement $media_key_path: $sparkle_signable" >&2
+            exit 1
+        fi
+    done
+    rm -f "$nested_entitlements"
+done
 
 UPSTREAM_SPARKLE_LICENSE="$ROOT/.build/checkouts/Sparkle/LICENSE"
 if [[ ! -s "$UPSTREAM_SPARKLE_LICENSE" ]]; then
@@ -107,4 +228,4 @@ if strings "$APP_BINARY" | grep -qF 'Mirror Existing Window'; then
     exit 1
 fi
 
-echo "CornerFloat repository checks OK: community files, static checks, bundled licenses, and retired mirroring surface absent"
+echo "CornerFloat repository checks OK: community files, media-capture privacy/signing declarations, static checks, bundled licenses, and retired mirroring surface absent"

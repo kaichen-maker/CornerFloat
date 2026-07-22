@@ -16,7 +16,8 @@
 
 ## Safety checklist
 
-- [ ] Ordinary web panels still request no special macOS privacy permission.
+- [ ] Ordinary browsing still requests no special macOS privacy permission.
+- [ ] Website microphone access remains HTTPS-only and behind separate macOS and WebKit user decisions; camera and combined capture remain denied.
 - [ ] Passkey permission remains tied to an explicit user action.
 - [ ] No credentials, private keys, provisioning profiles, cookies, or personal data are included.
 - [ ] Navigation, downloads, persistence, and retry behavior remain safe or the change is explained above.

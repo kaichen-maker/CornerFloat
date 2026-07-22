@@ -233,10 +233,10 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             symbol: "hand.raised.fill",
             eyebrow: "PRIVATE BY DEFAULT",
             title: "Your workspace stays yours",
-            message: "Web panels need no special macOS privacy permission and CornerFloat has no account or analytics service.",
+            message: "Ordinary web browsing needs no special macOS privacy permission, and CornerFloat has no account or analytics service.",
             details: [
-                "Quick Sites, favorites, recents, and saved workspaces remain in your macOS user account.",
-                "Web sessions and cookies are managed locally by Apple WebKit.",
+                "Quick Sites, favorites, recents, and saved workspaces remain in your macOS user account; WebKit manages website sessions locally.",
+                "An HTTPS site may ask for microphone access, normally after you start voice or dictation. CornerFloat never auto-approves it, keeps camera access blocked, and does not store or upload audio.",
                 "The red window button closes a panel but leaves CornerFloat in the menu bar; press Command–Q to quit the app."
             ]
         )

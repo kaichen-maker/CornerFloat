@@ -524,6 +524,13 @@ private struct WebKitIntegrationTestRunner {
         try expect(firstWebView.configuration.websiteDataStore.isPersistent, "production data store is not persistent")
         try expect(firstWebView.navigationDelegate === panel, "production navigation delegate is not wired")
         try expect(firstWebView.uiDelegate === panel, "production UI delegate is not wired")
+        let mediaCaptureSelector = NSSelectorFromString(
+            "webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:"
+        )
+        try expect(
+            panel.responds(to: mediaCaptureSelector),
+            "production UI delegate does not expose the website media-capture callback"
+        )
         let expectedBrowserProduct = BrowserSupport.browserApplicationName(
             version: Bundle.main.object(
                 forInfoDictionaryKey: "CFBundleShortVersionString"
