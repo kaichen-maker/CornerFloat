@@ -232,6 +232,25 @@ Test on a Mac that does not have the development certificate or repository check
 - [ ] Complete onboarding and open a normal web panel without granting special macOS privacy access.
 - [ ] Before using any website media control, confirm CornerFloat has not asked for microphone or camera access.
 - [ ] On an HTTPS test page, click a microphone-only voice or dictate control. Confirm microphone permission is requested only after that action and that macOS and the requesting website remain separate user-controlled decisions. Respond to both prompts in the order the system presents them, then confirm audio capture starts without the web content process terminating or showing **Content failed to load**.
+- [ ] With built-in input and output selected, confirm the same HTTPS microphone
+      request follows the normal two-decision path without showing the Bluetooth
+      route warning.
+- [ ] With a Bluetooth headset selected for input and output, confirm the native
+      voice-quality warning appears before the website's WebKit microphone
+      decision. Verify **Continue with Bluetooth** leaves both devices unchanged
+      and **Cancel** denies that request.
+- [ ] From the same warning, choose **Use Mac Microphone** and confirm the system
+      default input changes only after that click, the separate website decision
+      still appears, capture can begin after approval, and output remains on the
+      headset.
+- [ ] End website capture, then repeat while closing the panel and while quitting
+      CornerFloat. Confirm each path makes a best-effort restoration of the
+      previous input. During a fourth run, manually choose another input before
+      capture ends and confirm CornerFloat does not overwrite that later choice.
+- [ ] Compare a short, non-private live-voice exchange using Bluetooth duplex
+      with one using the Mac microphone and Bluetooth output. Confirm the latter
+      avoids the unexpectedly deep/slow route behavior. Do not record or publish
+      account audio as release evidence.
 - [ ] Stop voice mode and confirm capture ends. Quit and reopen CornerFloat, reload the same HTTPS page, and confirm normal browsing still does not start capture.
 - [ ] Repeat on a clean test account or reset privacy state, deny the macOS decision, and confirm the page remains alive. Enable CornerFloat under **System Settings → Privacy & Security → Microphone**, reload, and confirm the website can request again.
 - [ ] Request camera-only and combined camera-and-microphone capture from a controlled HTTPS fixture. Confirm both are denied and no camera permission prompt appears.

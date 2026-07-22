@@ -9,6 +9,7 @@
 - [ ] `make check`
 - [ ] AppKit acceptance, if relevant
 - [ ] Manual macOS scenario, if relevant
+- [ ] Bluetooth microphone-route choices and restoration, if media capture changed
 
 ## Visual evidence
 
@@ -18,6 +19,7 @@
 
 - [ ] Ordinary browsing still requests no special macOS privacy permission.
 - [ ] Website microphone access remains HTTPS-only and behind separate macOS and WebKit user decisions; camera and combined capture remain denied.
+- [ ] Any system input-device switch is explicit and temporary, and restoration cannot overwrite a later user choice.
 - [ ] Passkey permission remains tied to an explicit user action.
 - [ ] No credentials, private keys, provisioning profiles, cookies, or personal data are included.
 - [ ] Navigation, downloads, persistence, and retry behavior remain safe or the change is explained above.

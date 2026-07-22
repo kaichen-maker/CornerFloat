@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/repository-checks.sh"
 "$ROOT/dist/CornerFloat.app/Contents/MacOS/CornerFloat" --self-test
 "$ROOT/scripts/browser-tests.sh"
+"$ROOT/scripts/audio-route-tests.sh"
 "$ROOT/scripts/download-transaction-tests.sh"
 "$ROOT/scripts/passkey-tests.sh"
 "$ROOT/scripts/webkit-integration-tests.sh"

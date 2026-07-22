@@ -11,6 +11,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Privacy and support guidance now distinguishes permission-free browsing from
   HTTPS website microphone requests: macOS and the site's WebKit permission
   remain separate user choices, while camera access stays unavailable.
+- Before WebKit prompts for an HTTPS site's microphone request on a risky
+  Bluetooth input/output route, a native preflight now lets the user temporarily
+  use an available built-in Mac microphone, continue with Bluetooth unchanged,
+  or cancel. A temporary system input change occurs only after that explicit
+  choice and is restored on a best-effort basis when capture ends, the panel
+  closes, or CornerFloat quits, without overwriting a later user change.
 
 ### Fixed
 

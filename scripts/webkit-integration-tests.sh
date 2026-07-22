@@ -22,12 +22,15 @@ compile_with_sdk() {
         "$ROOT/Sources/CornerFloat/BrowserComponents.swift" \
         "$ROOT/Sources/CornerFloat/SmartAddressResolver.swift" \
         "$ROOT/Sources/CornerFloat/BrowserSupport.swift" \
+        "$ROOT/Sources/CornerFloat/AudioRouteSupport.swift" \
+        "$ROOT/Sources/CornerFloat/VoiceAudioRouteCoordinator.swift" \
         "$ROOT/Sources/CornerFloat/URLPersistenceSanitizer.swift" \
         "$ROOT/Sources/CornerFloat/DownloadDestinationTransaction.swift" \
         "$ROOT/Sources/CornerFloat/WebPanelController.swift" \
         "$ROOT/Tests/WebKitIntegrationTests/WebKitIntegrationTests.swift" \
         -framework AppKit \
         -framework WebKit \
+        -framework CoreAudio \
         -o "$TEST_BINARY"
 }
 

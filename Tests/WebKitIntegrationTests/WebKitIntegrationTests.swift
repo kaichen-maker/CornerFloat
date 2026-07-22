@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import Darwin
 import Foundation
 import WebKit
@@ -13,6 +14,68 @@ final class AppController {
     func index(of panel: FloatingPanelController) -> Int { 0 }
     func panelDidClose(_ panel: FloatingPanelController) {}
     func resolveAddress(_ input: String) -> URL? { SmartAddressResolver.resolve(input) }
+}
+
+private final class FakeAudioRouteController: AudioRouteControlling {
+    var currentInput: AudioRouteDevice?
+    let output: AudioRouteDevice?
+    let builtInInputs: [AudioRouteDevice]
+    private(set) var setCalls: [AudioDeviceID] = []
+    private(set) var restoreCalls: [(previousID: AudioDeviceID, temporaryID: AudioDeviceID)] = []
+
+    init(
+        currentInput: AudioRouteDevice?,
+        output: AudioRouteDevice?,
+        builtInInputs: [AudioRouteDevice]
+    ) {
+        self.currentInput = currentInput
+        self.output = output
+        self.builtInInputs = builtInInputs
+    }
+
+    func snapshot() throws -> AudioRouteSnapshot {
+        AudioRouteSnapshot(
+            defaultInput: currentInput,
+            defaultOutput: output,
+            builtInInputs: builtInInputs
+        )
+    }
+
+    func defaultInput() throws -> AudioRouteDevice? {
+        currentInput
+    }
+
+    func setDefaultInput(toBuiltIn deviceID: AudioDeviceID) throws -> AudioDeviceID {
+        guard let previousID = currentInput?.id,
+              let target = builtInInputs.first(where: { $0.id == deviceID }) else {
+            throw CoreAudioRouteError.deviceUnavailable(deviceID)
+        }
+        setCalls.append(deviceID)
+        currentInput = target
+        return previousID
+    }
+
+    func restoreDefaultInput(
+        previousID: AudioDeviceID,
+        temporaryID: AudioDeviceID
+    ) throws {
+        guard currentInput?.id == temporaryID else {
+            throw CoreAudioRouteError.defaultInputChangedExternally(
+                expected: temporaryID,
+                actual: currentInput?.id
+            )
+        }
+        restoreCalls.append((previousID, temporaryID))
+        currentInput = AudioRouteDevice(
+            id: previousID,
+            uid: "restored-\(previousID)",
+            name: "Restored Input",
+            transport: .bluetooth,
+            nominalSampleRate: 24_000,
+            inputChannelCount: 1,
+            outputChannelCount: 0
+        )
+    }
 }
 
 private struct CapturedHTTPRequest: Sendable {
@@ -484,6 +547,7 @@ private struct WebKitIntegrationTestRunner {
     static func main() async {
         _ = NSApplication.shared
         do {
+            try testVoiceRouteCoordinatorOwnershipAndConcurrency()
             try await testProductionPanelSharesPersistentCookiesAndPreservesPopupOpener()
             try await testProductionWorkspaceProjectionTabAccessibilityAndCycling()
             try await testProductionTabLimitBlocksWebsitePopups()
@@ -495,11 +559,131 @@ private struct WebKitIntegrationTestRunner {
                 integrationCookieValuesSynchronously(from: .default()).isEmpty,
                 "integration cookies leaked into the persistent WebKit store"
             )
-            print("CornerFloat WebKit integration tests OK: persistent cross-tab cookies, popup opener, workspace projection, accessible tab state, tab cycling, live-tab limits, dialogs, upload, download, GET/POST recovery and process-termination handling")
+            print("CornerFloat WebKit integration tests OK: voice-route ownership, concurrent capture safety, permission-decline restoration, persistent cross-tab cookies, popup opener, workspace projection, accessible tab state, tab cycling, live-tab limits, dialogs, upload, download, GET/POST recovery and process-termination handling")
         } catch {
             fputs("CornerFloat WebKit integration test failed: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    private static func testVoiceRouteCoordinatorOwnershipAndConcurrency() throws {
+        let airPodsInput = AudioRouteDevice(
+            id: 501,
+            uid: "airpods-input",
+            name: "AirPods Microphone",
+            transport: .bluetooth,
+            nominalSampleRate: 24_000,
+            inputChannelCount: 1,
+            outputChannelCount: 0
+        )
+        let airPodsOutput = AudioRouteDevice(
+            id: 502,
+            uid: "airpods-output",
+            name: "AirPods",
+            transport: .bluetooth,
+            nominalSampleRate: 48_000,
+            inputChannelCount: 0,
+            outputChannelCount: 2
+        )
+        let macInput = AudioRouteDevice(
+            id: 601,
+            uid: "mac-input",
+            name: "Mac Microphone",
+            transport: .builtIn,
+            nominalSampleRate: 48_000,
+            inputChannelCount: 1,
+            outputChannelCount: 0
+        )
+        let displayInput = AudioRouteDevice(
+            id: 602,
+            uid: "display-input",
+            name: "Display Microphone",
+            transport: .builtIn,
+            nominalSampleRate: 48_000,
+            inputChannelCount: 1,
+            outputChannelCount: 0
+        )
+
+        let route = FakeAudioRouteController(
+            currentInput: airPodsInput,
+            output: airPodsOutput,
+            builtInInputs: [macInput, displayInput]
+        )
+        let coordinator = VoiceAudioRouteCoordinator(
+            routeController: route,
+            monitorsSystemInput: false
+        )
+        let firstWebView = WKWebView(frame: .zero)
+        let secondWebView = WKWebView(frame: .zero)
+        coordinator.register(firstWebView)
+        coordinator.register(secondWebView)
+
+        _ = try coordinator.useBuiltInInput(macInput.id)
+        _ = try coordinator.useBuiltInInput(macInput.id)
+        try expect(route.setCalls == [macInput.id], "duplicate panels rewrote one temporary route")
+        do {
+            _ = try coordinator.useBuiltInInput(displayInput.id)
+            try expect(false, "a stale panel replaced the shared temporary route")
+        } catch VoiceAudioRouteCoordinatorError.conflictingTemporaryInput {
+            // Expected: the first panel retains ownership and its original input.
+        }
+
+        coordinator.prepareForCapture(in: firstWebView)
+        coordinator.prepareForCapture(in: secondWebView)
+        try expect(coordinator.integrationPendingCaptureCount == 2, "pending capture leases")
+        coordinator.integrationCaptureStateDidChange(.active, webView: firstWebView)
+        coordinator.integrationCaptureStateDidChange(.active, webView: secondWebView)
+        coordinator.integrationCaptureStateDidChange(.none, webView: firstWebView)
+        try expect(route.restoreCalls.isEmpty, "one panel restored while another was capturing")
+        coordinator.integrationCaptureStateDidChange(.none, webView: secondWebView)
+        try expect(route.restoreCalls.count == 1, "last capture did not restore the original input")
+
+        let declinedRoute = FakeAudioRouteController(
+            currentInput: airPodsInput,
+            output: airPodsOutput,
+            builtInInputs: [macInput]
+        )
+        let declinedCoordinator = VoiceAudioRouteCoordinator(
+            routeController: declinedRoute,
+            monitorsSystemInput: false
+        )
+        let declinedWebView = WKWebView(frame: .zero)
+        declinedCoordinator.register(declinedWebView)
+        _ = try declinedCoordinator.useBuiltInInput(macInput.id)
+        declinedCoordinator.prepareForCapture(in: declinedWebView)
+        declinedCoordinator.integrationCaptureStateDidChange(.none, webView: declinedWebView)
+        try expect(
+            declinedRoute.restoreCalls.count == 1,
+            "permission denial/none state left the temporary input selected"
+        )
+
+        let manualRoute = FakeAudioRouteController(
+            currentInput: airPodsInput,
+            output: airPodsOutput,
+            builtInInputs: [macInput, displayInput]
+        )
+        let manualCoordinator = VoiceAudioRouteCoordinator(
+            routeController: manualRoute,
+            monitorsSystemInput: false
+        )
+        _ = try manualCoordinator.useBuiltInInput(macInput.id)
+        manualCoordinator.integrationObserveDefaultInputChange(currentID: macInput.id)
+        manualCoordinator.integrationObserveDefaultInputChange(currentID: displayInput.id)
+        manualCoordinator.integrationObserveDefaultInputChange(currentID: macInput.id)
+        manualCoordinator.restoreForShutdown()
+        try expect(
+            manualRoute.restoreCalls.isEmpty,
+            "manual away-then-back input selection was overwritten"
+        )
+        try expect(
+            !manualCoordinator.integrationHasTemporaryInputLease,
+            "manual input change retained restoration ownership"
+        )
+
+        coordinator.unregister(firstWebView)
+        coordinator.unregister(secondWebView)
+        declinedCoordinator.unregister(declinedWebView)
+        print("  PASS voice-route ownership, concurrent panels, denial and manual-change safety")
     }
 
     private static func testProductionPanelSharesPersistentCookiesAndPreservesPopupOpener() async throws {

@@ -41,6 +41,37 @@ policy. Stop voice mode on the website when finished. If the feature requires a
 camera, use a browser that supports that request because CornerFloat keeps camera
 capture outside its current scope.
 
+## Bluetooth voice sounds deep, slow, or delayed
+
+[Apple explains](https://support.apple.com/en-us/102217) that using a Bluetooth
+headset for both playback and microphone input switches it from high-quality
+listening to lower-quality two-way audio. Before WebKit presents an HTTPS
+website's microphone decision on a risky Bluetooth input/output route,
+CornerFloat offers three choices when a built-in input is available:
+
+- **Use Mac Microphone** temporarily changes the system default input to the
+  built-in microphone, then continues to the website's WebKit decision. This
+  happens only after the user clicks the button.
+- **Continue with Bluetooth** leaves the current input and output unchanged and
+  continues to the website's WebKit decision.
+- **Cancel** denies the current website microphone request.
+
+If no built-in microphone is available, the explanation offers only
+**Continue with Bluetooth** and **Cancel**.
+
+After a temporary switch, CornerFloat makes a best-effort attempt to restore the
+previous input when the website stops microphone capture, the panel closes, or
+the app quits. It restores only if the default input is still the device
+CornerFloat selected. If the user changes the input in the meantime, that later
+system change makes CornerFloat relinquish its restoration ownership. The
+temporary default-input change is system-wide, so another audio app opened
+during the session can see the Mac microphone too.
+
+If audio remains distorted, end the website's voice session, choose the Mac's
+built-in microphone under **System Settings → Sound → Input**, and start the
+session again. Include the selected input and output device names in a support
+report, but never include a recording of a private conversation.
+
 For a website problem, retry in CornerFloat and then test the same page in the default browser. CornerFloat only retries an intact body-free GET/HEAD request; it will not silently replay a failed form POST. CornerFloat permits ChatGPT's Google redirect to continue in the panel and identifies itself truthfully in WebKit's user-agent; it does not impersonate Safari or Chrome, inject authentication scripts, or rewrite requests. Google may still reject OAuth in `WKWebView`, and Microsoft or an organization may apply similar policy. Use **More → Open in Default Browser** only if the provider actually refuses the session. That browser's Cookie session remains separate and cannot be imported into the panel.
 
 For a support request, include the app version/build, macOS version, Mac architecture, exact steps, and a redacted screenshot. Never include passwords, passkeys, session cookies, or authentication codes. The in-app Support page includes a safe diagnostics copier.

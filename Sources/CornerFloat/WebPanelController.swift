@@ -58,6 +58,13 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         let completion: WebKitCallback1<URL?>
     }
 
+    private struct PendingVoiceRouteRequest {
+        var machine: VoiceRoutePreflightMachine
+        let webView: WKWebView
+        let decisionHandler: WebKitCallback1<WKPermissionDecision>
+        let hasBuiltInAlternative: Bool
+    }
+
     private static let savedWidthKey = "preferredWebPanelWidth"
     private static let savedHeightKey = "preferredWebPanelHeight"
     private static let backItemIdentifier = NSToolbarItem.Identifier("CornerFloat.Back")
@@ -73,6 +80,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     /// Popups still use WebKit's supplied configuration in addTab(configuration:)
     /// so their opener relationship and browsing context remain intact.
     private static let sharedWebsiteDataStore = WKWebsiteDataStore.default()
+    private static let sharedVoiceAudioRouteCoordinator = VoiceAudioRouteCoordinator()
 
     private let persistsPreferredSize: Bool
     private let addressField = NSTextField()
@@ -100,6 +108,8 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
     private var pendingTabLimitMessage: String?
     private var isPresentingTabLimitNotice = false
     private var activeTabLimitAlert: NSAlert?
+    private var pendingVoiceRouteRequest: PendingVoiceRouteRequest?
+    private var activeVoiceRouteAlert: NSAlert?
     #if CORNERFLOAT_WEBKIT_INTEGRATION_TESTS
     private(set) var integrationTabLimitNoticeCount = 0
     #endif
@@ -690,6 +700,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         webView.allowsBackForwardNavigationGestures = true
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        Self.sharedVoiceAudioRouteCoordinator.register(webView)
 
         let tab = BrowserTab(webView: webView)
         tab.errorView.onRetry = { [weak self, weak tab] in
@@ -785,6 +796,8 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let tab = tabs[index]
         let wasSelected = selectedTab === tab
+        cancelPendingVoiceRouteRequest(for: tab.webView)
+        Self.sharedVoiceAudioRouteCoordinator.unregister(tab.webView)
         tab.webView.stopLoading()
         tab.webView.navigationDelegate = nil
         tab.webView.uiDelegate = nil
@@ -1177,7 +1190,199 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
             scheme: origin.protocol,
             capture: capture
         )
-        decisionHandler(decision == .prompt ? .prompt : .deny)
+        guard decision == .prompt else {
+            decisionHandler(.deny)
+            return
+        }
+
+        beginMicrophoneRoutePreflight(
+            for: webView,
+            decisionHandler: decisionHandler
+        )
+    }
+
+    private func beginMicrophoneRoutePreflight(
+        for webView: WKWebView,
+        decisionHandler: @escaping WebKitCallback1<WKPermissionDecision>
+    ) {
+        // A website should not be able to stack route sheets or strand an
+        // earlier WebKit completion handler.
+        guard pendingVoiceRouteRequest == nil else {
+            decisionHandler(.deny)
+            return
+        }
+
+        let assessment: VoiceRouteAssessment
+        do {
+            assessment = try Self.sharedVoiceAudioRouteCoordinator.assessment()
+        } catch {
+            // Failure to inspect optional audio metadata must never break an
+            // otherwise valid HTTPS microphone request.
+            fputs("CornerFloat could not inspect the current audio route: \(error)\n", stderr)
+            decisionHandler(.prompt)
+            return
+        }
+
+        var machine = VoiceRoutePreflightMachine()
+        let initialEffects = machine.begin(with: assessment)
+        if !initialEffects.isEmpty {
+            applyVoiceRouteEffects(
+                initialEffects,
+                machine: &machine,
+                webView: webView,
+                decisionHandler: decisionHandler
+            )
+            return
+        }
+
+        let hasBuiltInAlternative = assessment.recommendedBuiltInInput != nil
+        pendingVoiceRouteRequest = PendingVoiceRouteRequest(
+            machine: machine,
+            webView: webView,
+            decisionHandler: decisionHandler,
+            hasBuiltInAlternative: hasBuiltInAlternative
+        )
+
+        let alert = makeBluetoothVoiceRouteAlert(assessment: assessment)
+        activeVoiceRouteAlert = alert
+        present(alert) { [weak self] response in
+            self?.completeVoiceRoutePreflight(response: response)
+        }
+    }
+
+    private func makeBluetoothVoiceRouteAlert(
+        assessment: VoiceRouteAssessment
+    ) -> NSAlert {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Improve Bluetooth Voice Audio?"
+
+        let inputName = assessment.snapshot.defaultInput?.name ?? "Bluetooth microphone"
+        let outputName = assessment.snapshot.defaultOutput?.name ?? "Bluetooth headphones"
+        let rateText: String
+        if let rate = assessment.snapshot.defaultInput?.nominalSampleRate {
+            rateText = " (\(Int(rate / 1_000)) kHz)"
+        } else {
+            rateText = ""
+        }
+        let alternativeText: String
+        if let alternative = assessment.recommendedBuiltInInput {
+            alternativeText = "Use Mac Microphone temporarily changes only the system input to \(alternative.name), while \(outputName) remains available for listening. CornerFloat restores the previous input after voice capture ends unless you change it yourself."
+            alert.addButton(withTitle: "Use Mac Microphone")
+            alert.addButton(withTitle: "Continue with Bluetooth")
+            alert.addButton(withTitle: "Cancel")
+        } else {
+            alternativeText = "No built-in microphone is currently available. You can continue with Bluetooth or cancel and choose another input in System Settings."
+            alert.addButton(withTitle: "Continue with Bluetooth")
+            alert.addButton(withTitle: "Cancel")
+        }
+
+        alert.informativeText = "\(inputName) is the current input\(rateText) while \(outputName) is the current output. macOS can switch Bluetooth headphones to a lower-bandwidth two-way call mode, making live AI speech sound deep, slow, or delayed.\n\n\(alternativeText)"
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
+        return alert
+    }
+
+    private func completeVoiceRoutePreflight(
+        response: NSApplication.ModalResponse
+    ) {
+        guard var request = pendingVoiceRouteRequest else { return }
+        pendingVoiceRouteRequest = nil
+        activeVoiceRouteAlert = nil
+
+        let decision: VoiceRouteDecision
+        if request.hasBuiltInAlternative {
+            switch response {
+            case .alertFirstButtonReturn:
+                decision = .useBuiltInInput
+            case .alertSecondButtonReturn:
+                decision = .continueCurrentRoute
+            default:
+                decision = .cancel
+            }
+        } else {
+            decision = response == .alertFirstButtonReturn
+                ? .continueCurrentRoute
+                : .cancel
+        }
+
+        let effects = request.machine.handle(decision)
+        applyVoiceRouteEffects(
+            effects,
+            machine: &request.machine,
+            webView: request.webView,
+            decisionHandler: request.decisionHandler
+        )
+    }
+
+    private func applyVoiceRouteEffects(
+        _ effects: [VoiceRoutePreflightEffect],
+        machine: inout VoiceRoutePreflightMachine,
+        webView: WKWebView,
+        decisionHandler: WebKitCallback1<WKPermissionDecision>
+    ) {
+        guard let effect = effects.first else { return }
+        switch effect {
+        case .setDefaultInput(let deviceID):
+            do {
+                let previousID = try Self.sharedVoiceAudioRouteCoordinator
+                    .useBuiltInInput(deviceID)
+                let next = machine.completeSwitch(
+                    succeeded: true,
+                    previousID: previousID
+                )
+                applyVoiceRouteEffects(
+                    next,
+                    machine: &machine,
+                    webView: webView,
+                    decisionHandler: decisionHandler
+                )
+            } catch {
+                let next = machine.completeSwitch(succeeded: false)
+                applyVoiceRouteEffects(
+                    next,
+                    machine: &machine,
+                    webView: webView,
+                    decisionHandler: decisionHandler
+                )
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentVoiceRouteFailure()
+                }
+            }
+
+        case .allowCapture:
+            Self.sharedVoiceAudioRouteCoordinator.prepareForCapture(in: webView)
+            decisionHandler(.prompt)
+
+        case .denyCapture:
+            decisionHandler(.deny)
+
+        case .restoreDefaultInput:
+            // Restoration belongs to the shared coordinator because another
+            // panel may still be capturing when this request completes.
+            break
+        }
+    }
+
+    private func presentVoiceRouteFailure() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Could Not Change Microphone"
+        alert.informativeText = "CornerFloat could not complete the temporary microphone change. Review the current input in System Settings → Sound → Input, then try voice mode again."
+        alert.addButton(withTitle: "OK")
+        present(alert) { _ in }
+    }
+
+    private func cancelPendingVoiceRouteRequest(for webView: WKWebView) {
+        guard let request = pendingVoiceRouteRequest,
+              request.webView === webView else { return }
+        pendingVoiceRouteRequest = nil
+        request.decisionHandler(.deny)
+
+        if let alertWindow = activeVoiceRouteAlert?.window,
+           let sheetParent = alertWindow.sheetParent {
+            sheetParent.endSheet(alertWindow, returnCode: .cancel)
+        }
+        activeVoiceRouteAlert = nil
     }
 
     func webView(
@@ -1689,6 +1894,16 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         activeTabLimitAlert = nil
         pendingTabLimitMessage = nil
 
+        if let request = pendingVoiceRouteRequest {
+            pendingVoiceRouteRequest = nil
+            request.decisionHandler(.deny)
+        }
+        if let alertWindow = activeVoiceRouteAlert?.window,
+           let sheetParent = alertWindow.sheetParent {
+            sheetParent.endSheet(alertWindow, returnCode: .cancel)
+        }
+        activeVoiceRouteAlert = nil
+
         activeSavePanel?.cancel(nil)
         let pending = destinationQueue
         destinationQueue.removeAll()
@@ -1711,6 +1926,7 @@ final class WebPanelController: FloatingPanelController, WKNavigationDelegate, W
         }
 
         for tab in tabs {
+            Self.sharedVoiceAudioRouteCoordinator.unregister(tab.webView)
             tab.webView.stopLoading()
             tab.webView.navigationDelegate = nil
             tab.webView.uiDelegate = nil

@@ -29,6 +29,7 @@ let package = Package(
                 .linkedFramework("AuthenticationServices"),
                 .linkedFramework("Carbon"),
                 .linkedFramework("ServiceManagement"),
+                .linkedFramework("CoreAudio"),
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "@loader_path/../Frameworks"

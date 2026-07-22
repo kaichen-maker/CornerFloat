@@ -24,6 +24,7 @@ global access permission-free is recorded in
 | Menus and global entry points | `MainMenuController.swift`, `StatusBarController.swift`, `GlobalHotKeyController.swift`, `LaunchAtLoginController.swift` | Native menus, status item, configurable permission-free hot key, and user-controlled Login Item registration |
 | Floating window foundation | `FloatingPanelController.swift`, `WindowGeometry.swift`, `GlassUI.swift` | Panel style, native resizing, placement, Spaces behavior, edge auto-hide, and material fallback |
 | Browser | `WebPanelController.swift`, `BrowserComponents.swift`, `BrowserSupport.swift`, `SmartAddressResolver.swift` | Tabs, WebKit delegates, address resolution, navigation and media-capture policy, uploads, downloads, dialogs, and recovery UI |
+| Audio-route preflight | `AudioRouteSupport.swift`, `VoiceAudioRouteCoordinator.swift`, `WebPanelController.swift` | Read local Core Audio route facts, classify Bluetooth voice-quality risk, coordinate an explicit temporary input choice, and conditionally restore it |
 | Local library | `WorkspaceLibrary.swift`, `WorkspaceLibraryController.swift` | Quick Sites, favorites, recents, saved layouts, persistence, and the management window |
 | Passkeys | `PasskeyAuthorization.swift` | User-triggered browser passkey authorization state and recovery guidance |
 | Updates | `UpdateController.swift` plus release scripts | Sparkle wiring for configured releases and offline-safe behavior for development builds |
@@ -89,6 +90,40 @@ no camera usage declaration or camera entitlement. CornerFloat does not own an
 audio recorder, audio store, or audio upload path; after approval, the selected
 website handles microphone audio under its own privacy policy.
 
+Before returning `prompt` on a risky Bluetooth input/output route, the browser
+controller pauses the decision and presents a native preflight. When a built-in
+input is available, the user can explicitly choose one of three outcomes:
+
+- temporarily set a currently available built-in Mac microphone as the system
+  default input, then continue to WebKit's website decision;
+- leave the Bluetooth route unchanged and continue to WebKit's website
+  decision; or
+- deny the current request.
+
+Without a built-in alternative, the preflight omits the first outcome and offers
+only continue or cancel.
+
+Reading a route snapshot never changes system state. A switch effect is emitted
+only after the first choice, and the Core Audio layer verifies that the target
+is an available built-in input before writing the system default. The previous
+input and the temporary replacement live only in the active preflight state.
+When WebKit reports microphone capture ended, the panel closes, or the app
+terminates, restoration is best effort and conditional: restore only if the
+current default still equals CornerFloat's temporary input. A user or another
+application that changes the input in the meantime also causes the shared
+coordinator to relinquish restoration ownership when Core Audio reports the
+default-input event.
+
+Unknown metadata, a missing built-in alternative, or a failed input switch must
+not cause a silent device change. Snapshot-inspection failure falls back to the
+standard WebKit prompt; a missing built-in alternative removes the switch
+option; an attempted switch failure denies that request and explains how to
+choose an input manually. The preflight does not intercept microphone samples,
+grant a website blanket permission, persist an audio-device choice, or inject
+Web Audio processing. Keep Core Audio inspection and mutation behind the small
+route controller, route policy in the pure state machine, and AppKit/WebKit
+decisions on the main actor.
+
 ## Persistence
 
 `WorkspaceLibrary` stores Quick Sites, favorites, recents, workspace descriptors,
@@ -117,9 +152,13 @@ The private Apple and Sparkle credentials never belong in the repository. See
 
 - Pure helper tests exercise address resolution, filenames, retry safety, error
   mapping, media-capture policy, and external schemes.
+- Audio-route tests exercise Bluetooth/low-rate risk classification, explicit
+  state-machine choices, verified switching, and the rule that restoration
+  never overwrites a later input-device change.
 - Authorization tests use fakes to prove passkey prompts remain user-triggered.
 - WebKit integration tests use a loopback-only fixture and production browser
-  controller code.
+  controller code, including microphone-decision wiring without claiming to
+  reproduce Bluetooth hardware behavior.
 - Application self-tests verify model and controller invariants without private
   services.
 - AppKit acceptance runs real windows, the Carbon hot key, and lifecycle/energy

@@ -51,6 +51,17 @@
   </ol>
   <p>CornerFloat does not itself record, store, or upload audio. Once both permissions are granted, the selected website handles microphone audio under its own privacy policy. Stop voice mode on the website when finished. If a feature requires a camera, use a browser that supports that request because CornerFloat keeps camera capture outside its current scope.</p>
 
+  <h2>Bluetooth voice sounds deep, slow, or delayed</h2>
+  <p><a href="https://support.apple.com/en-us/102217">Apple explains</a> that using a Bluetooth headset for both playback and microphone input switches it from high-quality listening to lower-quality two-way audio. Before WebKit presents an HTTPS website’s microphone decision on a risky Bluetooth input/output route, CornerFloat offers three choices when a built-in input is available:</p>
+  <ul>
+    <li><strong>Use Mac Microphone</strong> temporarily changes the system default input to the built-in microphone, then continues to the website’s WebKit decision. This happens only after you click the button.</li>
+    <li><strong>Continue with Bluetooth</strong> leaves the current input and output unchanged and continues to the website’s WebKit decision.</li>
+    <li><strong>Cancel</strong> denies the current website microphone request.</li>
+  </ul>
+  <p>If no built-in microphone is available, the explanation offers only <strong>Continue with Bluetooth</strong> and <strong>Cancel</strong>.</p>
+  <p>After a temporary switch, CornerFloat makes a best-effort attempt to restore the previous input when the website stops microphone capture, the panel closes, or the app quits. It restores only if the default input is still the device CornerFloat selected, and it relinquishes restoration ownership when it observes a later default-input change. The temporary default-input change is system-wide and can also be seen by other audio apps.</p>
+  <p>If audio remains distorted, end the website voice session, choose the Mac’s built-in microphone under <strong>System Settings → Sound → Input</strong>, and start again. Include the selected input and output device names in a support report, but never include a recording of a private conversation.</p>
+
   <h2>A panel is hard to find</h2>
   <p>Use <strong>Window → Move to Bottom Right</strong>, or reopen a saved workspace. CornerFloat repairs off-screen panel positions after display changes and wake. If edge auto-hide is enabled, move the pointer to the screen edge to reveal the panel.</p>
 

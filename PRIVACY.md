@@ -26,6 +26,24 @@ both permissions are granted, audio is captured for and handled by the selected
 website under that website's terms and privacy policy. The website may transmit
 or retain audio independently of CornerFloat, so review its policy before use.
 
+Before WebKit presents a website microphone decision on a Bluetooth input/output
+route that may reduce voice quality, CornerFloat reads the current local
+audio-device and route information needed for that risk check and displays a
+native choice. It does not persist that information. When a built-in input is
+available, **Use Mac Microphone** changes the system default input only after the
+user clicks it; **Continue with Bluetooth** leaves the route unchanged;
+**Cancel** denies that request. Without a built-in alternative, the first option
+is omitted. The separate macOS and website permissions remain under the user's
+control.
+
+A temporary input change is system-wide and may be visible to other audio apps.
+CornerFloat attempts to restore the previous input when website capture ends,
+the panel closes, or the app quits, but only while the default input still
+matches the device CornerFloat selected. A manual user change therefore takes
+precedence when CornerFloat observes the system's default-input change.
+CornerFloat does not copy, analyze, persist, or transmit microphone audio to a
+CornerFloat service.
+
 Traffic to websites is governed by those websites’ policies. If automatic updates are enabled, the configured update feed receives a normal HTTP request that can include version, macOS version, IP address, and user agent. CornerFloat adds no advertising or cross-site identifier.
 
 To delete Quick Sites, favorites, recents, and saved workspaces, quit CornerFloat and remove `~/Library/Application Support/CornerFloat`. Preferences are stored separately by macOS; run `defaults delete com.calvinkai.cornerfloat` while CornerFloat is quit to reset them. WebKit cookies and website data are separate and must also be removed if the goal is to clear website sessions. See the in-app Privacy Policy for the complete policy.

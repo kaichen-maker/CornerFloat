@@ -93,6 +93,14 @@ require two separate choices: respond to the macOS CornerFloat prompt and the
 requesting website's WebKit prompt in the order the system presents them. A
 camera request, including a combined camera-and-microphone request, is denied.
 
+If the current input/output route risks Bluetooth two-way audio degradation, a
+CornerFloat explanation appears before the website's WebKit prompt. Choose
+**Use Mac Microphone** to switch the system default input temporarily when a
+built-in input is available, **Continue with Bluetooth** to leave the route
+unchanged, or **Cancel** to deny that request. Without a built-in alternative,
+the explanation offers only the latter two choices. A temporary switch occurs
+only after an explicit choice.
+
 ### Try it without installing
 
 From the source folder, run the following commands to build and open a temporary
@@ -184,6 +192,9 @@ replacement.
 - Multiple browser tabs, persistent website sessions, upload/download, popups,
   JavaScript dialogs, secure website voice/dictation, and actionable failure
   states.
+- A native Bluetooth voice preflight before website microphone capture, with
+  explicit choices to use an available Mac microphone temporarily, keep
+  Bluetooth unchanged, or cancel.
 - Native Settings (`Command-,`) for launch behavior, Launch at Login, edge
   auto-hide, conflict-safe global shortcut presets, and local data portability.
 - Favorites, recent destinations, and saved multi-panel workspaces.
@@ -202,7 +213,8 @@ replacement.
   show/hide shortcut request no Accessibility, Screen Recording, camera, or
   microphone access by themselves. An HTTPS site can request the microphone,
   but WebKit and macOS keep access behind user decisions; camera capture remains
-  denied.
+  denied. A temporary system input switch is separately user-triggered and
+  guarded against overwriting a later manual device change.
 - **Defensive browser behavior:** unsafe address-bar schemes are blocked,
   external app launches require confirmation, and failed form submissions are
   never silently replayed.
@@ -295,6 +307,19 @@ It does not automatically approve microphone access, record audio itself, or
 store or upload audio. After both permissions are granted, the HTTPS website you
 chose receives and handles microphone audio under its own privacy policy.
 
+Before WebKit prompts on a risky Bluetooth input/output route, CornerFloat reads
+only the local device details needed for a voice-quality check and offers
+**Use Mac Microphone**, **Continue with Bluetooth**, or **Cancel** when a
+built-in input is available; otherwise it offers continue or cancel. Choosing
+the Mac microphone temporarily changes the system default input, so other audio
+apps can observe it during the session. When website capture ends, the panel
+closes, or CornerFloat quits, the app makes a best-effort restoration of the
+previous input only if the current input is still CornerFloat's temporary
+choice. CornerFloat also monitors default-input changes and relinquishes its
+temporary-route ownership when it detects a later user or app choice. Device
+choices are not persisted, and CornerFloat does not copy, analyze, store, or
+send microphone audio to a CornerFloat service.
+
 Quick Sites, favorites, recents, and workspace layouts stay under the current
 macOS user's Application Support directory. Settings can export or import that
 library as inspectable JSON; WebKit manages site cookies and sessions separately
@@ -308,6 +333,12 @@ For website voice or dictation, use the control on an HTTPS page. If access was
 previously denied, enable CornerFloat under **System Settings → Privacy &
 Security → Microphone**, reload the page, and review the website's own prompt or
 site settings. See [SUPPORT.md](SUPPORT.md) for the complete recovery steps.
+
+Apple explains that a Bluetooth headset used for both playback and microphone
+input switches from high-quality listening to lower-quality two-way audio; see
+[If sound quality is reduced when using Bluetooth headphones with your Mac](https://support.apple.com/en-us/102217).
+CornerFloat avoids that switch only when the user explicitly chooses the Mac
+microphone. Continuing with Bluetooth deliberately preserves the current route.
 
 Google prohibits OAuth authorization inside application-controlled embedded
 browsers, and Microsoft or an organization may impose a similar restriction.
